@@ -11,7 +11,7 @@ Lightweight FastAPI-based services for transcription, diarization, TTS, and summ
 
 ## Local development
 1. Create a virtualenv and install dependencies from `requirements.txt` (model extras can remain commented out in constrained environments).
-2. Run the API with `uvicorn python_services.api.server:app --reload`.
+2. Run the API with `python -m python_services` (or override defaults with `PY_SERVICES_HOST`, `PY_SERVICES_PORT`, `PY_SERVICES_RELOAD`, `PY_SERVICES_LOG_LEVEL`).
 3. Exercise the scaffold with `curl` or a REST client; responses are deterministic for easy testing.
 
 ## Next steps
