@@ -268,6 +268,52 @@
 4. **Optimization & Mobile (Weeks 10–12):** tune latency/resource ceilings, add Android thin client with remote Python option, and ship GPU/CPU Docker images.
 5. **GA Readiness (Weeks 13–14):** finalize runbook, alerts, support tooling (“Report misuse”), and freeze model versions with reproducible build manifests.
 
+## Test Matrix and Traceability
+- **Unit tests**
+  - Java: audio buffer math, VAD thresholding logic, and UI state reducers. Mock gRPC to validate backpressure signals.
+  - Python: STT/TTS client wrappers, diarization clustering heuristics, consent receipt persistence, and policy validation.
+- **Integration tests**
+  - End-to-end pipeline on bundled fixtures: capture → VAD → gRPC → Whisper/pyannote → UI chat feed with speaker prompts.
+  - Persistence flows: gallery enroll/update/delete, retention sweeps, and quarantine release path.
+  - Security flows: keystore-backed encryption, certificate pinning for remote sidecar, and policy bundle signature checks.
+- **System/E2E tests**
+  - Installer smoke tests on Windows/macOS/Linux: run the bundled clip and assert STT/DER thresholds and screenshot RTL layout.
+  - Offline/air-gapped: install from offline bundle, run smoke test, verify model signature enforcement and update refusal.
+  - Mobile thin client to remote sidecar: measure latency, dropped frames, and reconnection after airplane mode toggle.
+- **Soak & longevity**
+  - 2–3 hour meeting replay with periodic network drops and clock drift; ensure no leaked buffers, drifted timestamps, or quota overruns.
+  - Storage pressure scenario: shrink disk to <10% free and confirm prioritization/purging order preserves audit logs unless user opted in.
+- **Traceability**
+  - Maintain a **test-to-requirement map** (spreadsheet or YAML) tying each SLO/acceptance criterion to test IDs and fixtures.
+  - Every PR must link to executed test cases and artifacts (logs, screenshots, HTML reports) to satisfy the Definition of Done.
+
+## Release Notes and Change Control
+- **Templates**
+  - Include model/policy versions, major user-visible changes, known issues/workarounds, and rollback guidance per release.
+  - Provide localized (Farsi/English) summaries with RTL-aware formatting and accessible tables.
+- **Versioning rules**
+  - Semantic versioning tied to policy/model compatibility; bump minor for new features behind flags, bump major when policies or data formats change incompatibly.
+  - Tag releases with build manifest hashes and SBOM checksum references for provenance.
+- **Approval workflow**
+  - Require sign-off from engineering (quality gates met), security (policy/consent/encryption verified), and product (UX/accessibility snapshots) before promotion to stable.
+  - Capture approvals in PR comments plus a release ticket that links test artifacts and the production readiness checklist.
+- **Hotfix protocol**
+  - Maintain a minimal hotfix branch with pre-approved dependencies and model versions; limit scope to Sev-1 fixes with updated SBOM and attestation.
+  - Post-hotfix, re-run regression slices and merge back to main with an RCA note tied to affected acceptance criteria.
+
+## Field Quality and Feedback Loop
+- **Telemetry (opt-in)**
+  - Collect anonymized counters: STT/TTS latency buckets, DER/WER drift tags, VAD false triggers, and cache hit rates; strip transcript text and PII.
+  - Gate uploads on explicit consent and enterprise policy; expose a live “telemetry off” indicator in settings.
+- **In-app feedback workflows**
+  - “Mark inaccurate transcript” and “bad pronunciation” buttons attach hashed spans and environment metadata (device, model versions) for triage queues.
+  - “Report misuse” captures redacted logs + policy bundle version; prompt for consent before attaching short audio snippets.
+- **Quality review cadence**
+  - Weekly triage of feedback buckets mapped to components (capture, STT, diarization, TTS, summaries, UX); open tickets with actionable owners and target release.
+  - Feed curated clips back into the adversarial and regression suites; document deltas in the release notes.
+- **Success metrics**
+  - Track reduction in DER/WER on user-flagged clips, pronunciation fix turnaround time, and support ticket resolution times; tie improvements to feature flag promotions.
+
 ## Open Risks and Mitigations
 - **GPU scarcity:** fall back to CPU Vosk + smaller pyannote checkpoint; gate latency expectations accordingly and message “degraded mode” in UI.
 - **Accented Farsi coverage:** expand corpora with regional dialect samples; allow per-meeting acoustic adaptation and prioritize names/keywords via contextual biasing.
