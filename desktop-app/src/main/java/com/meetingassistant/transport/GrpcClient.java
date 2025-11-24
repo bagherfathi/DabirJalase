@@ -1,7 +1,7 @@
 package com.meetingassistant.transport;
 
 /**
- * Streaming client placeholder. Wire to gRPC stubs emitted by python-services.
+ * Streaming client placeholder. Wire to gRPC stubs emitted by python_services.
  */
 public class GrpcClient {
     public void initializeChannel() {
