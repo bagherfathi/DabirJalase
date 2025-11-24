@@ -107,6 +107,9 @@
 - Add health endpoints: `/healthz` (process up), `/readyz` (models loaded), `/metrics` (Prometheus).
 - Include **log redaction** for PII in telemetry; separate clean-room crash reports from content data.
 - Ship a lightweight **operational runbook** alongside installers: start/stop commands, common error signatures (e.g., missing CUDA), and remediation steps.
+- Add **canary mode**: route 1–5% of sessions to the newest STT/diarization models with shadow evaluation against the stable channel; promote only if WER/DER and latency stay within SLOs.
+- Keep **profiling presets** (desktop GPU, desktop CPU, Android streaming) and attach flamegraph captures to regression runs to catch bottlenecks in audio pipelines, protobuf serialization, and UI rendering.
+- Maintain a **metrics dictionary** (metric name, units, owner, alert thresholds) in source control to avoid drift between code, dashboards, and runbook.
 
 ## Resilience & Offline Behavior
 - Cache critical assets (fonts, UI strings, offline models) to allow **air-gapped transcription** with degraded accuracy.
@@ -115,6 +118,13 @@
 - For intermittent connectivity on Android thin client, persist captured PCM chunks and **upload with checksum validation** when a connection resumes.
 - Add watchdogs for stalled streams: if no transcript arrives in N seconds, recycle gRPC stream and alert the user.
 - Auto-rotate diarization galleries when embeddings are stale (>90 days) or exceed size thresholds; prompt to archive rarely seen speakers.
+
+## Configuration, Secrets, and Policy Management
+- **Configuration layers:** default config in repo → packaged overrides per OS → user-level overrides in `~/.meeting-transcriber/config.toml`; use explicit schema validation and reject unknown keys.
+- **Secret handling:** store API keys (Azure/Google TTS) in OS keystore; never log secrets; enforce rotation reminders and expiry dates. Permit offline mode when secrets are missing instead of crashing.
+- **Policy bundles:** versioned JSON files describing retention limits, consent prompts, export rules, and cloud/online toggles. Embed bundle hash in summaries/exports for auditability.
+- **Feature flags:** gate experimental diarization models, canary percentages, and UI trust cues; default to **safe** flags after crashes until the user re-enables them.
+- **Configuration audits:** log config diffs on startup and after updates; surface a “policy mismatch” badge if runtime config conflicts with packaged defaults.
 
 
 ## Data Model & Storage Details
@@ -140,6 +150,9 @@
 - **Resource usage ceilings:** CPU < 250% and RAM < 3.5 GB for the Python sidecar during typical 2-speaker calls; trigger backpressure when approaching ceilings.
 - **Energy/battery checks (Android):** STT/diarization runs capped at 20% battery drain per hour; suspend background upload if below 15% battery unless on charger.
 - **Ethics/consent:** verify UI flows in screenshots to ensure consent banner and “forget speaker” controls are present; mandate locale-aware RTL layout snapshots in CI for Farsi.
+- **LLM safety:** summarize with grounded prompts that reference transcript spans; add **hallucination suppressors** (e.g., require citeable spans per bullet). Reject summaries when faithfulness score falls below threshold and keep the transcript-only export available.
+- **TTS quality checks:** include pronunciation regression tests for common Farsi names and honorifics; detect SSML failures and retry with simplified text. Mark cached TTS clips with the model voice and locale used.
+- **Adversarial audio tests:** maintain a suite with background TV/radio, overlapping speakers, and microphone handling noise; track DER/WER/latency across these stressors.
 
 ## Failure & Recovery Playbook
 - **Streaming interruptions:** recycle gRPC channels on heartbeat loss; queue up to N segments locally with exponential backoff retries; surface a “Resending…” badge per segment.
@@ -147,6 +160,13 @@
 - **Diarization drift:** if DER spikes beyond threshold in live metrics, temporarily disable gallery writes and revert to anonymous speaker tags until drift clears; prompt user to re-run noise calibration.
 - **Storage pressure:** enforce quotas; when disk space < 10%, automatically purge expired audio first, then quarantined segments, while preserving audit logs unless the user opts in to purge.
 - **Policy mismatches:** when importing archives with older policy versions, present a reconciliation wizard to re-collect consent and re-embed speakers before activation.
+
+## Localization, Accessibility, and UX Validation
+- **RTL correctness:** run screenshot-based visual tests for right-to-left layout, proper ligatures, and alignment of chat bubbles; treat RTL regressions as release blockers.
+- **Screen-reader support:** label controls for voiceover/TalkBack; ensure live transcript updates are announced without overwhelming the user (throttled announcements with priority for new speakers).
+- **Input methods:** validate Persian keyboard input for speaker names and search; handle mixed-script queries when filtering transcripts.
+- **Color and motion:** respect OS high-contrast/reduced-motion preferences; provide a monochrome theme option for projector readability during meetings.
+- **Idle/privacy states:** add a “privacy curtain” that hides transcripts when the window loses focus or on user request; show obfuscated previews until reactivated.
 
 ## MVP Implementation Steps
 1. Scaffold JavaFX app with audio capture + VAD and a chat-style transcript panel.
