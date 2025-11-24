@@ -24,6 +24,7 @@ from python_services.storage.manifests import SessionExport, TranscriptManifest
 from python_services.stt.whisper_service import Transcript, WhisperService
 from python_services.summarization.summarizer import Summarizer
 from python_services.tts.tts_service import TextToSpeechService
+from python_services.vad.simple_vad import SpeechSpan, detect_speech
 
 settings = ServiceSettings.from_env()
 logger = logging.getLogger("python_services.api")
@@ -135,6 +136,12 @@ class ForgetSpeakerRequest(BaseModel):
     redaction_text: str = "[redacted]"
 
 
+class VadRequest(BaseModel):
+    samples: List[float]
+    threshold: float = 0.01
+    min_run: int = 3
+
+
 def _translate_session_error(exc: KeyError):
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -149,6 +156,16 @@ def transcribe(request: TranscribeRequest):
     transcript: Transcript = stt.transcribe(request.content, language=request.language)
     metrics.counter("transcribe.calls").inc()
     return {"language": transcript.language, "segments": [asdict(s) for s in transcript.segments]}
+
+
+@app.post("/vad")
+def run_vad(request: VadRequest):
+    if request.min_run < 1:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="min_run must be >= 1")
+
+    spans: List[SpeechSpan] = detect_speech(request.samples, threshold=request.threshold, min_run=request.min_run)
+    metrics.counter("vad.calls").inc()
+    return {"triggered": bool(spans), "segments": [span.asdict() for span in spans]}
 
 
 @app.post("/diarize")

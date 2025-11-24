@@ -5,6 +5,7 @@ Lightweight FastAPI-based services for transcription, diarization, TTS, and summ
 ## Endpoints
 - `GET /health` — readiness probe
 - `POST /transcribe` — accepts `{ content, language }`, returns transcript segments
+- `POST /vad` — accepts `{ samples, threshold?, min_run? }`, returns speech spans to gate when to ship audio chunks
 - `POST /diarize` — accepts `{ transcript }`, returns hashed speaker labels
 - `POST /summarize` — accepts `{ transcript, max_points }`, returns bullet points and a highlight
 - `POST /tts` — accepts `{ text, voice }`, returns base64-encoded payload
