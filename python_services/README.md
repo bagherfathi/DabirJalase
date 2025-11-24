@@ -23,6 +23,7 @@ To keep the scaffold product-shaped, a minimal in-memory session orchestrator st
 - `GET /sessions/{id}/summary` — summarize accumulated segments for the session
 - `GET /sessions/{id}/export` — export the full meeting manifest with speaker labels and a deterministic summary for download or archival
 - `POST /sessions/{id}/export/store` — export and persist the manifest to `PY_SERVICES_STORAGE_DIR` (defaults to `./data/exports`)
+- `POST /exports/{id}/restore` — reload a stored manifest from disk back into the in-memory session store (preserves speaker labels)
 - `DELETE /sessions/{id}` — remove the in-memory session and any persisted export manifest (idempotent)
 - `POST /exports/retention/sweep` — prune stored manifests older than the configured retention window (if enabled)
 
@@ -38,7 +39,7 @@ Replace these with durable storage/queue-backed flows when wiring the production
 
 ### In-process smoke test
 
-- Validate the stitched API without running a server by executing `python -m python_services.ops.smoke`. The harness exercises session creation, diarization, speaker labeling, summary, export, persistence, and retrieval. Override with `--api-key` or `--storage-dir` to mirror deployment settings.
+- Validate the stitched API without running a server by executing `python -m python_services.ops.smoke`. The harness exercises session creation, diarization, speaker labeling, summary, export, persistence, retrieval, and restore. Override with `--api-key` or `--storage-dir` to mirror deployment settings.
 
 ### Access control and traceability
 

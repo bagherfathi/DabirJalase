@@ -133,3 +133,23 @@ class SessionStore:
 
     def clear(self) -> None:
         self._sessions.clear()
+
+    def restore(self, export: SessionExport) -> Session:
+        """Hydrate a session from a persisted export manifest."""
+
+        session = Session(
+            session_id=export.session_id,
+            language=export.language,
+            created_at=export.created_at,
+            segments=[
+                DiarizedSegment(speaker=segment.speaker, text=segment.text)
+                for segment in export.segments
+            ],
+            speaker_labels={
+                segment.speaker: segment.speaker_label
+                for segment in export.segments
+                if segment.speaker_label
+            },
+        )
+        self._sessions[session.session_id] = session
+        return session

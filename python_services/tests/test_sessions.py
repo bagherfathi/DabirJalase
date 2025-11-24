@@ -76,3 +76,22 @@ def test_forget_speaker_redacts_segments():
     assert scrubbed == 1
     assert session.serialized_segments()[0]["text"] == "[removed]"
     assert session.serialized_segments()[0]["speaker_label"] is None
+
+
+def test_restore_from_export_rehydrates_labels_and_segments():
+    store = SessionStore()
+    session = store.create("rehydrate", language="fa")
+    diarized = server.diarization.diarize(server.stt.transcribe("salam"))
+    store.append(session.session_id, diarized)
+    speaker_id = diarized[0].speaker
+    store.label(session.session_id, speaker_id, "Ali")
+
+    exported = store.export(session.session_id, server.summarizer)
+
+    store.clear()
+    restored = store.restore(exported)
+
+    assert restored.session_id == exported.session_id
+    assert restored.language == exported.language
+    assert restored.created_at == exported.created_at
+    assert restored.serialized_segments()[0]["speaker_label"] == "Ali"

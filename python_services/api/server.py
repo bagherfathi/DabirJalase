@@ -319,6 +319,28 @@ def fetch_stored_export(session_id: str):
     }
 
 
+@app.post("/exports/{session_id}/restore")
+def restore_export(session_id: str):
+    try:
+        exported = persistence.load_export(session_id, settings.storage_dir)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    restored_session = sessions.restore(exported)
+    metrics.counter("exports.restore").inc()
+
+    return {
+        "session_id": restored_session.session_id,
+        "created_at": restored_session.created_at.isoformat(),
+        "language": restored_session.language,
+        "segments": restored_session.serialized_segments(),
+        "summary": {
+            "highlight": exported.summary.highlight,
+            "bullet_points": exported.summary.bullet_points,
+        },
+    }
+
+
 @app.post("/exports/retention/sweep")
 def sweep_exports(request: RetentionSweepRequest):
     retention_days = request.retention_days or settings.export_retention_days

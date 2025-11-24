@@ -92,3 +92,39 @@ def test_retention_sweep_removes_old_exports(tmp_path, monkeypatch):
     sweep = client.post("/exports/retention/sweep", json={"retention_days": 30})
     assert sweep.status_code == 200
     assert sweep.json()["removed"] == ["cleanup"]
+
+
+def test_restore_endpoint_rehydrates_session(tmp_path, monkeypatch):
+    import python_services.api.server as server
+
+    monkeypatch.setenv("PY_SERVICES_STORAGE_DIR", str(tmp_path))
+    reload(server)
+    server.sessions.clear()
+
+    client = TestClient(server.app)
+
+    created = client.post("/sessions", json={"session_id": "restore-me", "language": "fa"})
+    assert created.status_code == 200
+
+    appended = client.post("/sessions/append", json={"session_id": "restore-me", "transcript": "salam"})
+    assert appended.status_code == 200
+    speaker_id = appended.json()["new_speakers"][0]
+
+    labeled = client.post(
+        "/sessions/restore-me/speakers", json={"speaker_id": speaker_id, "display_name": "Guest"}
+    )
+    assert labeled.status_code == 200
+
+    stored = client.post("/sessions/restore-me/export/store")
+    assert stored.status_code == 200
+
+    # Simulate a restart that clears in-memory sessions
+    server.sessions.clear()
+
+    restored = client.post("/exports/restore-me/restore")
+    assert restored.status_code == 200
+    payload = restored.json()
+
+    assert payload["session_id"] == "restore-me"
+    assert payload["segments"][0]["speaker_label"] == "Guest"
+    assert payload["summary"]["highlight"]
