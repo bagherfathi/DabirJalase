@@ -61,3 +61,18 @@ def test_session_export_contains_labels_and_summary():
     assert exported.summary.highlight
     assert exported.segments[0].speaker_label == "Guest"
     assert exported.segments[0].speaker == speaker_id
+
+
+def test_forget_speaker_redacts_segments():
+    store = SessionStore()
+    session = store.create("privacy")
+    diarized = server.diarization.diarize(server.stt.transcribe("salam"))
+    store.append(session.session_id, diarized)
+    speaker_id = diarized[0].speaker
+    store.label(session.session_id, speaker_id, "Temp")
+
+    session, scrubbed = store.forget(session.session_id, speaker_id, "[removed]")
+
+    assert scrubbed == 1
+    assert session.serialized_segments()[0]["text"] == "[removed]"
+    assert session.serialized_segments()[0]["speaker_label"] is None

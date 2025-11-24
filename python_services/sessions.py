@@ -32,6 +32,28 @@ class Session:
     def label_speaker(self, speaker_id: str, display_name: str) -> None:
         self.speaker_labels[speaker_id] = display_name
 
+    def forget_speaker(self, speaker_id: str, redaction_text: str = "[redacted]") -> int:
+        """Remove a speaker label and redact matching segments.
+
+        Returns the number of segments scrubbed. The diarization speaker keys
+        remain in place to keep timelines stable for clients, but the text is
+        replaced with a deterministic placeholder.
+        """
+
+        scrubbed = 0
+        self.speaker_labels.pop(speaker_id, None)
+
+        updated_segments: List[DiarizedSegment] = []
+        for segment in self.segments:
+            if segment.speaker == speaker_id:
+                scrubbed += 1
+                updated_segments.append(DiarizedSegment(speaker=segment.speaker, text=redaction_text))
+            else:
+                updated_segments.append(segment)
+
+        self.segments = updated_segments
+        return scrubbed
+
     def summary(self, summarizer) -> Summary:
         transcript_text = " ".join(segment.text for segment in self.segments)
         return summarizer.summarize(transcript_text)
@@ -93,11 +115,21 @@ class SessionStore:
         session.label_speaker(speaker_id, display_name)
         return session
 
+    def forget(self, session_id: str, speaker_id: str, redaction_text: str = "[redacted]") -> Tuple[Session, int]:
+        session = self.get(session_id)
+        scrubbed = session.forget_speaker(speaker_id, redaction_text)
+        return session, scrubbed
+
     def summary(self, session_id: str, summarizer) -> Summary:
         return self.get(session_id).summary(summarizer)
 
     def export(self, session_id: str, summarizer) -> SessionExport:
         return self.get(session_id).export(summarizer)
+
+    def delete(self, session_id: str) -> None:
+        if session_id not in self._sessions:
+            raise KeyError(f"Unknown session {session_id}")
+        del self._sessions[session_id]
 
     def clear(self) -> None:
         self._sessions.clear()

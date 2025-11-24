@@ -57,6 +57,13 @@ class FastAPI:
 
         return decorator
 
+    def delete(self, path: str):
+        def decorator(func: Callable):
+            self.routes.append({"method": "DELETE", "path": path, "handler": func})
+            return func
+
+        return decorator
+
     def middleware(self, _type: str):
         def decorator(func: Callable):
             self.middlewares.append(func)
@@ -150,8 +157,15 @@ class TestClient:
     def post(self, path: str, headers: Optional[Dict[str, str]] = None, json: Any = None) -> Response:
         return self.request("POST", path, headers=headers, json=json)
 
+    def delete(self, path: str, headers: Optional[Dict[str, str]] = None) -> Response:
+        return self.request("DELETE", path, headers=headers)
 
-status = SimpleNamespace(HTTP_401_UNAUTHORIZED=401)
+
+status = SimpleNamespace(
+    HTTP_401_UNAUTHORIZED=401,
+    HTTP_404_NOT_FOUND=404,
+    HTTP_400_BAD_REQUEST=400,
+)
 
 
 __all__ = ["FastAPI", "HTTPException", "Request", "Response", "TestClient", "status"]

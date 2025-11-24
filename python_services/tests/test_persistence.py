@@ -3,7 +3,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from python_services.storage.manifests import SegmentRecord, SessionExport
-from python_services.storage.persistence import list_exports, load_export, prune_exports, save_export
+from python_services.storage.persistence import (
+    delete_export,
+    list_exports,
+    load_export,
+    prune_exports,
+    save_export,
+)
 from python_services.summarization.summarizer import Summary
 
 
@@ -63,3 +69,17 @@ def test_prune_exports_removes_old_files(tmp_path):
     assert removed == ["old"]
     assert (Path(tmp_path) / "exports" / "recent.json").exists()
     assert not (Path(tmp_path) / "exports" / "old.json").exists()
+
+
+def test_delete_export_is_idempotent(tmp_path):
+    export = SessionExport(
+        session_id="remove-me",
+        created_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        language="fa",
+        segments=[SegmentRecord(speaker="spk", text="bye", speaker_label=None)],
+        summary=Summary(highlight="done", bullet_points=["bp"]),
+    )
+
+    save_export(export, base_dir=str(tmp_path))
+    assert delete_export("remove-me", base_dir=str(tmp_path)) is True
+    assert delete_export("remove-me", base_dir=str(tmp_path)) is False

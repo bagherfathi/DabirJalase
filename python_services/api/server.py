@@ -90,6 +90,15 @@ class RetentionSweepRequest(BaseModel):
     retention_days: int | None = None
 
 
+class ForgetSpeakerRequest(BaseModel):
+    speaker_id: str
+    redaction_text: str = "[redacted]"
+
+
+def _translate_session_error(exc: KeyError):
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
 @app.get("/health")
 def healthcheck():
     return {"status": "ok", "message": "scaffold"}
@@ -127,7 +136,10 @@ def append_to_session(request: SessionAppendRequest):
     manifest = TranscriptManifest.from_diarized(
         transcript_id=request.session_id, language=transcript.language, segments=diarized
     )
-    session, new_speakers = sessions.append(request.session_id, manifest.segments)
+    try:
+        session, new_speakers = sessions.append(request.session_id, manifest.segments)
+    except KeyError as exc:  # pragma: no cover - exercised via API tests
+        _translate_session_error(exc)
     metrics.counter("sessions.append").inc()
     return {
         "session_id": session.session_id,
@@ -138,14 +150,20 @@ def append_to_session(request: SessionAppendRequest):
 
 @app.get("/sessions/{session_id}/summary")
 def summarize_session(session_id: str):
-    summary = sessions.summary(session_id, summarizer)
+    try:
+        summary = sessions.summary(session_id, summarizer)
+    except KeyError as exc:  # pragma: no cover - exercised via API tests
+        _translate_session_error(exc)
     metrics.counter("sessions.summary").inc()
     return {"highlight": summary.highlight, "bullet_points": summary.bullet_points}
 
 
 @app.get("/sessions/{session_id}/export")
 def export_session(session_id: str):
-    exported: SessionExport = sessions.export(session_id, summarizer)
+    try:
+        exported: SessionExport = sessions.export(session_id, summarizer)
+    except KeyError as exc:  # pragma: no cover - exercised via API tests
+        _translate_session_error(exc)
     metrics.counter("sessions.export").inc()
     return {
         "session_id": exported.session_id,
@@ -158,7 +176,10 @@ def export_session(session_id: str):
 
 @app.post("/sessions/{session_id}/export/store")
 def export_and_store(session_id: str):
-    exported: SessionExport = sessions.export(session_id, summarizer)
+    try:
+        exported: SessionExport = sessions.export(session_id, summarizer)
+    except KeyError as exc:  # pragma: no cover - exercised via API tests
+        _translate_session_error(exc)
     saved_path = persistence.save_export(exported, settings.storage_dir)
     removed = []
     if settings.export_retention_days is not None:
@@ -205,21 +226,56 @@ def sweep_exports(request: RetentionSweepRequest):
     return {"removed": removed, "retention_days": retention_days}
 
 
+@app.delete("/sessions/{session_id}")
+def delete_session(session_id: str):
+    session_present = sessions.exists(session_id)
+    if session_present:
+        sessions.delete(session_id)
+    export_removed = persistence.delete_export(session_id, settings.storage_dir)
+    metrics.counter("sessions.delete").inc()
+    return {
+        "session_id": session_id,
+        "session_removed": session_present,
+        "export_removed": export_removed,
+    }
+
+
 @app.get("/sessions/{session_id}")
 def get_session(session_id: str):
-    session = sessions.get(session_id)
+    try:
+        session = sessions.get(session_id)
+    except KeyError as exc:  # pragma: no cover - exercised via API tests
+        _translate_session_error(exc)
     metrics.counter("sessions.get").inc()
     return {"session_id": session.session_id, "segments": session.serialized_segments(), "language": session.language}
 
 
 @app.post("/sessions/{session_id}/speakers")
 def label_speaker(session_id: str, request: SpeakerLabelRequest):
-    session = sessions.label(session_id, request.speaker_id, request.display_name)
+    try:
+        session = sessions.label(session_id, request.speaker_id, request.display_name)
+    except KeyError as exc:  # pragma: no cover - exercised via API tests
+        _translate_session_error(exc)
     metrics.counter("sessions.label").inc()
     return {
         "session_id": session.session_id,
         "speaker": request.speaker_id,
         "display_name": request.display_name,
+        "segments": session.serialized_segments(),
+    }
+
+
+@app.post("/sessions/{session_id}/speakers/forget")
+def forget_speaker(session_id: str, request: ForgetSpeakerRequest):
+    try:
+        session, scrubbed = sessions.forget(session_id, request.speaker_id, request.redaction_text)
+    except KeyError as exc:  # pragma: no cover - exercised via API tests
+        _translate_session_error(exc)
+    metrics.counter("sessions.forget").inc()
+    return {
+        "session_id": session.session_id,
+        "speaker": request.speaker_id,
+        "scrubbed_segments": scrubbed,
         "segments": session.serialized_segments(),
     }
 

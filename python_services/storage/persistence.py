@@ -85,6 +85,17 @@ def load_export(session_id: str, base_dir: str) -> SessionExport:
     )
 
 
+def delete_export(session_id: str, base_dir: str) -> bool:
+    """Delete a stored export manifest if present and return whether it was removed."""
+
+    export_dir = _export_dir(base_dir)
+    path = export_dir / f"{session_id}.json"
+    if not path.exists():
+        return False
+    path.unlink(missing_ok=True)
+    return True
+
+
 def prune_exports(base_dir: str, max_age_days: int, *, now: datetime | None = None) -> List[str]:
     """Delete exports older than ``max_age_days`` and return removed session IDs."""
 
