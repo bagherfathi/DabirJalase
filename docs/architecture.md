@@ -260,6 +260,37 @@
 - Integration tests that stream sample Farsi audio through the Python service and validate transcript accuracy thresholds and diarization purity.
 - UI tests for prompt flow when a new speaker is detected.
 
+## Operational SLOs and Support Tooling
+- **Availability:** Python sidecar ready < 45 seconds after app start; transcript streaming uptime > 99% during a meeting.
+- **Latency:** end-to-end capture → transcript p95 < 3.5 s on desktop GPU; Android thin client upload jitter < 250 ms p95.
+- **Quality:** WER < 15% and DER < 10% on the reference suite; summarize faithfulness score > 0.75 before display.
+- **Data safety:** zero known-loss incidents for transcripts/audio; failed writes auto-retry with idempotent segment IDs.
+- **Support bundle:** one-click “Collect diagnostics” produces redacted logs, recent crash dumps, latest smoke-test report, policy bundle hash, and hardware profile (CPU/GPU/driver) for triage.
+- **Self-heal:** watchdog restarts sidecar on healthcheck failures; UI surfaces countdown and rolls over to degraded mode if restart fails twice.
+
+## Migration, Rollback, and Backfill Guidance
+- **Schema migrations:** versioned SQL migrations with preflight checks for disk space and backup availability; block upgrades if retention/audit tables are missing indexes that guard sweeps.
+- **Backfills:** enqueue idempotent jobs to recompute embeddings when model versions change; tag partially processed rows and resume on next launch.
+- **Rollback:** keep previous app + model bundles for two versions; rollback script restores prior SQLite/Postgres snapshot and clears incompatible caches.
+- **Data imports:** enforce manifest compatibility before ingest; dry-run option validates hashes and policy versions without writing.
+- **Index hygiene:** periodic VACUUM/ANALYZE (SQLite) or REINDEX (Postgres) scheduled during idle hours; alert when table bloat exceeds 20% of base size.
+
+## Manual QA and Field Validation Checklist
+- **Capture & VAD:** verify start/stop hotkey, device switch mid-call, and accurate silence-triggered chunking using the bundled fixture and a live mic.
+- **Diarization & prompts:** confirm unknown-speaker prompt fires within 2–3 utterances; test overlapping speakers and enrollment liveness challenge.
+- **TTS:** exercise Farsi pronunciation for common names/honorifics, SSML fallback, and cached prompt reuse; confirm playback ducking when focus-on-speaker is active.
+- **Summaries:** validate timestamped bullets, faithfulness score display, and the ability to jump back to audio from a bullet.
+- **Resilience:** simulate network drop (pull cable/disable Wi-Fi) and confirm queued uploads + checksum replay on reconnect; kill the sidecar process to ensure watchdog recovery.
+- **Privacy/consent:** check banner visibility, “forget speaker” flow (scrubs embeddings + segments + audit entries), and that exported transcripts respect pseudonymization.
+- **Localization/accessibility:** run RTL screenshot comparison, screen-reader announcement for live transcript updates, and high-contrast theme toggles.
+
+## High-Risk Scenarios and Defenses
+- **Cross-talk in noisy rooms:** run separation/denoise preset; emphasize highest-energy speaker in UI and quarantine low-confidence segments for review.
+- **Playback interference:** detect loopback/feedback by checking near-zero-latency echo patterns; auto-lower TTS volume and prompt to mute speakers.
+- **Adversarial audio or spoofed enrollment:** enforce randomized enrollment phrases, run anti-spoof heuristics, and require user confirmation before updating trusted gallery entries.
+- **Resource exhaustion:** apply CPU/VRAM budgets per process; shed load by reducing VAD sensitivity and downgrading model sizes before dropping audio.
+- **Clock drift across devices:** align segments with monotonic timestamps and resample slowly to avoid transcript timing skew in long sessions.
+
 ## Alternatives
 - Cross-platform via **Electron + Node** with Python backend if web tech is preferred.
 - Mobile option: reuse Python service in the cloud; Android app in Kotlin streams audio via WebRTC to backend.
