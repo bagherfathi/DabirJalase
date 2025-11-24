@@ -193,6 +193,59 @@
 - **Color and motion:** respect OS high-contrast/reduced-motion preferences; provide a monochrome theme option for projector readability during meetings.
 - **Idle/privacy states:** add a “privacy curtain” that hides transcripts when the window loses focus or on user request; show obfuscated previews until reactivated.
 
+## Deployment, Packaging, and Environment Strategy
+- **Target bundles:** ship desktop binaries per OS (Windows .msi, macOS .pkg/.dmg notarized, Linux .deb/.rpm/AppImage) with an embedded JRE and optional embedded Python env. Offer a “lean” installer that downloads models on first run to cut initial size.
+- **Runtime separation:** isolate Python sidecar into its own process with signed wheels and pinned hashes; prefer **venv + uv** for deterministic dependency sync. On macOS, harden runtime with entitlements for microphone/file access only.
+- **Model delivery:** cache models under an app-specific directory (`AppData`, `~/Library/Application Support`, `$XDG_DATA_HOME`), versioned by checksum. Add a background job to prune superseded models while honoring retention windows.
+- **Update policy:** delta-updates via background downloader with rollback to the previous signed bundle. Block upgrades when policies/configs are incompatible without explicit user consent.
+- **Hybrid deployment:** allow remote Python services when a GPU is unavailable; enforce TLS + mutual auth for LAN/cloud connects. Provide a self-hosted Docker Compose stack with GPU-enabled images and a CPU-only override profile.
+
+## Data Governance, Storage, and Retention Flows
+- **Schema highlights:**
+  - `meetings` (id, title, start/end time, consent_version, retention_policy_id).
+  - `segments` (meeting_id, start/end timestamps, speaker_id, transcript_text, model_version, vad_score, confidence, checksum).
+  - `speakers` (id, display_name, embedding_vector, embedding_version, enrollment_audio_hash, last_seen, trust_state).
+  - `artifacts` (meeting_id, type=audio|summary|export, path/hash, created_at, encrypted=true/false, purge_after).
+- **Retention automation:** store retention policies in a table with duration + scope; a nightly job sweeps expired `artifacts` and `segments`, skipping audit logs unless the user opts in to purge.
+- **Consent receipts:** persist consent prompts with timestamp, locale, policy version, and capture device. Include an exportable PDF/HTML receipt for compliance queries.
+- **Data subject rights:** add endpoints/CLI to export or purge a single speaker profile and their associated segments; re-run diarization to anonymize remaining text when purging embeddings.
+- **Encryption & keys:** encrypt artifacts at rest with OS keychain-protected keys on desktop; on the server, use envelope encryption per tenant. Rotate keys with a migration job that rewrites artifacts and updates key metadata.
+
+## Threat Model and Abuse Handling
+- **Privacy threats:** microphone hot-mic risk → require explicit capture toggle with clear status indicator; auto-stop capture on OS session lock; audit every microphone activation.
+- **Spoofing/impersonation:** enforce liveness challenges during new-speaker enrollment (prompt to read a random Farsi phrase); flag sudden voiceprint deviations and pause auto-labeling until user confirmation.
+- **Tampering:** verify signed updates, validate model checksums before load, and enforce HTTPS/TLS 1.2+ with pinned backends for remote services.
+- **Data exfiltration:** sandbox file access to app directories; require user confirmation for exports leaving the machine; redact PII from summaries by default unless the user requests otherwise.
+- **Abuse reporting:** provide a one-click “Report misuse” that packages logs (with PII redaction) and current policy versions for support.
+
+## Observability and Alerting Runbook
+- **Metrics minimums:**
+  - gRPC E2E latency percentiles (p50/p95) for capture → transcript → summary.
+  - DER/WER rolling averages and model version tags.
+  - VAD false-positive/false-negative rates on daily samples.
+  - TTS time-to-first-byte and synthesis duration.
+  - Resource gauges: CPU/RAM/VRAM, queue depth, dropped frames.
+- **Alerting:**
+  - Page when DER or WER exceeds thresholds for 3 consecutive runs.
+  - Warn when disk space < 15% or model cache exceeds quota.
+  - Notify when speaker gallery trust score drops (potential spoof) or when consent receipts fail to persist.
+- **Log hygiene:** structured logs with correlation IDs per meeting; redact transcripts by default but allow protected debug logging with short TTL for support. Keep a **data-handling ledger** log stream for audit trails.
+- **Dashboards:** per-OS health widgets, Android battery/throughput charts, and cache hit/miss panels. Include a privacy mode that hides PII in dashboards for demos.
+
+## Delivery Roadmap (Phased)
+1. **Foundations (Weeks 1–3):** scaffold JavaFX UI, VAD pipeline, gRPC stubs, and local Python service with Whisper + pyannote + Azure TTS; ship smoke-test harness.
+2. **Quality Gating (Weeks 4–6):** add evaluation corpora, DER/WER dashboards, RTL/accessibility tests, and automated policy/consent flows; implement retention sweeper.
+3. **Resilience & Security (Weeks 7–9):** add backpressure, offline queueing, signed update channel, encryption at rest, liveness checks for enrollment, and sandboxed export flows.
+4. **Optimization & Mobile (Weeks 10–12):** tune latency/resource ceilings, add Android thin client with remote Python option, and ship GPU/CPU Docker images.
+5. **GA Readiness (Weeks 13–14):** finalize runbook, alerts, support tooling (“Report misuse”), and freeze model versions with reproducible build manifests.
+
+## Open Risks and Mitigations
+- **GPU scarcity:** fall back to CPU Vosk + smaller pyannote checkpoint; gate latency expectations accordingly and message “degraded mode” in UI.
+- **Accented Farsi coverage:** expand corpora with regional dialect samples; allow per-meeting acoustic adaptation and prioritize names/keywords via contextual biasing.
+- **Background TV/music bleed-through:** train/adopt separation/denoising frontends; add a “conference room” preset that tightens VAD thresholds and applies aggressive suppression.
+- **Long-meeting drift:** periodically re-align transcripts with WhisperX alignment and refresh dominant-speaker scores; chunk summaries hourly to avoid context loss.
+- **User trust & consent fatigue:** cache previously accepted policy versions per device and prompt only on material changes; provide concise, localized summaries of what changed.
+
 ## MVP Implementation Steps
 1. Scaffold JavaFX app with audio capture + VAD and a chat-style transcript panel.
 2. Create Python gRPC service exposing STT (Whisper), diarization (pyannote), TTS (vendor/local), and summarization endpoints.
