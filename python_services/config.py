@@ -21,6 +21,7 @@ class ServiceSettings:
     api_key: str | None = None
     request_id_header: str = "x-request-id"
     storage_dir: str = "data"
+    export_retention_days: int | None = 30
 
     @classmethod
     def from_env(cls) -> "ServiceSettings":
@@ -35,6 +36,13 @@ class ServiceSettings:
                 return False
             return default
 
+        def as_int(value: str | None, default: int | None) -> int | None:
+            if value is None:
+                return default
+            if value.lower() in {"none", "", "-1"}:
+                return None
+            return int(value)
+
         return cls(
             host=os.getenv("PY_SERVICES_HOST", cls.host),
             port=int(os.getenv("PY_SERVICES_PORT", cls.port)),
@@ -43,6 +51,9 @@ class ServiceSettings:
             api_key=os.getenv("PY_SERVICES_API_KEY"),
             request_id_header=os.getenv("PY_SERVICES_REQUEST_ID_HEADER", cls.request_id_header),
             storage_dir=os.getenv("PY_SERVICES_STORAGE_DIR", cls.storage_dir),
+            export_retention_days=as_int(
+                os.getenv("PY_SERVICES_EXPORT_RETENTION_DAYS"), cls.export_retention_days
+            ),
         )
 
 

@@ -1,4 +1,5 @@
 from importlib import reload
+from pathlib import Path
 
 from fastapi import TestClient
 
@@ -62,3 +63,32 @@ def test_export_store_and_fetch(tmp_path, monkeypatch):
     payload = fetched.json()
     assert payload["session_id"] == "persist"
     assert payload["summary"]["highlight"]
+
+
+def test_retention_sweep_removes_old_exports(tmp_path, monkeypatch):
+    import json
+    import python_services.api.server as server
+
+    monkeypatch.setenv("PY_SERVICES_STORAGE_DIR", str(tmp_path))
+    reload(server)
+    server.sessions.clear()
+
+    client = TestClient(server.app)
+
+    created = client.post("/sessions", json={"session_id": "cleanup", "language": "fa"})
+    assert created.status_code == 200
+
+    appended = client.post("/sessions/append", json={"session_id": "cleanup", "transcript": "salam"})
+    assert appended.status_code == 200
+
+    stored = client.post("/sessions/cleanup/export/store")
+    assert stored.status_code == 200
+
+    export_path = Path(stored.json()["saved_path"])
+    payload = json.loads(export_path.read_text())
+    payload["created_at"] = "2023-01-01T00:00:00+00:00"
+    export_path.write_text(json.dumps(payload))
+
+    sweep = client.post("/exports/retention/sweep", json={"retention_days": 30})
+    assert sweep.status_code == 200
+    assert sweep.json()["removed"] == ["cleanup"]

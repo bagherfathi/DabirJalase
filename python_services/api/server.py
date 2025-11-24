@@ -86,6 +86,10 @@ class TtsRequest(BaseModel):
     voice: str = "fa-IR-Standard-A"
 
 
+class RetentionSweepRequest(BaseModel):
+    retention_days: int | None = None
+
+
 @app.get("/health")
 def healthcheck():
     return {"status": "ok", "message": "scaffold"}
@@ -156,8 +160,11 @@ def export_session(session_id: str):
 def export_and_store(session_id: str):
     exported: SessionExport = sessions.export(session_id, summarizer)
     saved_path = persistence.save_export(exported, settings.storage_dir)
+    removed = []
+    if settings.export_retention_days is not None:
+        removed = persistence.prune_exports(settings.storage_dir, settings.export_retention_days)
     metrics.counter("sessions.export.store").inc()
-    return {"session_id": exported.session_id, "saved_path": str(saved_path)}
+    return {"session_id": exported.session_id, "saved_path": str(saved_path), "pruned": removed}
 
 
 @app.get("/exports")
@@ -182,6 +189,20 @@ def fetch_stored_export(session_id: str):
         "segments": [asdict(segment) for segment in exported.segments],
         "summary": {"highlight": exported.summary.highlight, "bullet_points": exported.summary.bullet_points},
     }
+
+
+@app.post("/exports/retention/sweep")
+def sweep_exports(request: RetentionSweepRequest):
+    retention_days = request.retention_days or settings.export_retention_days
+    if retention_days is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="retention sweeping disabled; set retention_days to enable",
+        )
+
+    removed = persistence.prune_exports(settings.storage_dir, retention_days)
+    metrics.counter("exports.prune").inc()
+    return {"removed": removed, "retention_days": retention_days}
 
 
 @app.get("/sessions/{session_id}")

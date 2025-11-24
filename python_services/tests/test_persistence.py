@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from python_services.storage.manifests import SegmentRecord, SessionExport
-from python_services.storage.persistence import list_exports, load_export, save_export
+from python_services.storage.persistence import list_exports, load_export, prune_exports, save_export
 from python_services.summarization.summarizer import Summary
 
 
@@ -37,3 +37,29 @@ def test_list_exports_returns_sorted_ids(tmp_path):
     result = list_exports(base_dir=str(tmp_path))
 
     assert result == ["a", "b", "c"]
+
+
+def test_prune_exports_removes_old_files(tmp_path):
+    recent = SessionExport(
+        session_id="recent",
+        created_at=datetime(2024, 1, 10, tzinfo=timezone.utc),
+        language="fa",
+        segments=[SegmentRecord(speaker="spk", text="hi", speaker_label=None)],
+        summary=Summary(highlight="now", bullet_points=["bp"]),
+    )
+    old = SessionExport(
+        session_id="old",
+        created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
+        language="fa",
+        segments=[SegmentRecord(speaker="spk2", text="bye", speaker_label=None)],
+        summary=Summary(highlight="then", bullet_points=["bp"]),
+    )
+
+    save_export(recent, base_dir=str(tmp_path))
+    save_export(old, base_dir=str(tmp_path))
+
+    removed = prune_exports(base_dir=str(tmp_path), max_age_days=365, now=datetime(2024, 1, 15, tzinfo=timezone.utc))
+
+    assert removed == ["old"]
+    assert (Path(tmp_path) / "exports" / "recent.json").exists()
+    assert not (Path(tmp_path) / "exports" / "old.json").exists()

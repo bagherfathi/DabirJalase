@@ -7,7 +7,7 @@ surface for manifests.
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List
 
@@ -83,4 +83,31 @@ def load_export(session_id: str, base_dir: str) -> SessionExport:
             bullet_points=payload["summary"]["bullet_points"],
         ),
     )
+
+
+def prune_exports(base_dir: str, max_age_days: int, *, now: datetime | None = None) -> List[str]:
+    """Delete exports older than ``max_age_days`` and return removed session IDs."""
+
+    export_dir = _export_dir(base_dir)
+    if not export_dir.exists():
+        return []
+
+    current = now or datetime.now(timezone.utc)
+    cutoff = current - timedelta(days=max_age_days)
+    removed: List[str] = []
+
+    for path in export_dir.glob("*.json"):
+        try:
+            payload = json.loads(path.read_text())
+            created_at = datetime.fromisoformat(payload["created_at"])
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+        except Exception:  # pragma: no cover - defensive guard for malformed files
+            continue
+
+        if created_at < cutoff:
+            path.unlink(missing_ok=True)
+            removed.append(path.stem)
+
+    return sorted(removed)
 
