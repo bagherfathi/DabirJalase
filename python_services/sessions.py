@@ -23,6 +23,7 @@ class Session:
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     segments: List[DiarizedSegment] = field(default_factory=list)
     speaker_labels: Dict[str, str] = field(default_factory=dict)
+    audio_buffer: List[float] = field(default_factory=list)
 
     def append_segments(self, new_segments: List[DiarizedSegment]) -> List[str]:
         new_speakers = [s.speaker for s in new_segments if s.speaker not in self.speaker_labels]
@@ -57,6 +58,22 @@ class Session:
     def summary(self, summarizer) -> Summary:
         transcript_text = " ".join(segment.text for segment in self.segments)
         return summarizer.summarize(transcript_text)
+
+    def append_audio(self, samples: List[float], trim_to: int | None = None) -> int:
+        self.audio_buffer.extend(samples)
+
+        if trim_to is not None and trim_to > 0:
+            overflow = len(self.audio_buffer) - trim_to
+            if overflow > 0:
+                self.audio_buffer = self.audio_buffer[overflow:]
+
+        return len(samples)
+
+    def audio_samples(self, max_samples: int | None = None) -> List[float]:
+        if max_samples is None or max_samples <= 0:
+            return list(self.audio_buffer)
+
+        return self.audio_buffer[-max_samples:]
 
     def export(self, summarizer) -> SessionExport:
         summary = self.summary(summarizer)
@@ -105,6 +122,14 @@ class SessionStore:
         new_speakers = session.append_segments(segments)
         return session, new_speakers
 
+    def append_audio(self, session_id: str, samples: List[float], trim_to: int | None = None) -> Session:
+        if session_id not in self._sessions:
+            raise KeyError(f"Unknown session {session_id}")
+
+        session = self._sessions[session_id]
+        session.append_audio(samples, trim_to=trim_to)
+        return session
+
     def get(self, session_id: str) -> Session:
         if session_id not in self._sessions:
             raise KeyError(f"Unknown session {session_id}")
@@ -125,6 +150,9 @@ class SessionStore:
 
     def export(self, session_id: str, summarizer) -> SessionExport:
         return self.get(session_id).export(summarizer)
+
+    def audio_samples(self, session_id: str, max_samples: int | None = None) -> List[float]:
+        return self.get(session_id).audio_samples(max_samples=max_samples)
 
     def delete(self, session_id: str) -> None:
         if session_id not in self._sessions:

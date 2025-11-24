@@ -149,6 +149,11 @@ class SessionIngestRequest(BaseModel):
     transcript_hint: str = "speech detected"
 
 
+class SessionAudioAppendRequest(BaseModel):
+    samples: List[float]
+    trim_to: int | None = None
+
+
 def _translate_session_error(exc: KeyError):
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -215,6 +220,46 @@ def ingest_session_audio(session_id: str, request: SessionIngestRequest):
         "spans": [span.asdict() for span in spans],
         "segments": session.serialized_segments(),
         "new_speakers": new_speakers,
+    }
+
+
+@app.post("/sessions/{session_id}/audio")
+def append_session_audio(session_id: str, request: SessionAudioAppendRequest):
+    if request.trim_to is not None and request.trim_to < 1:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="trim_to must be >= 1 when provided")
+
+    if not request.samples:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="samples are required")
+
+    try:
+        session = sessions.append_audio(session_id, request.samples, trim_to=request.trim_to)
+    except KeyError as exc:  # pragma: no cover - exercised via API tests
+        _translate_session_error(exc)
+
+    metrics.counter("sessions.audio.append.calls").inc()
+
+    return {
+        "session_id": session.session_id,
+        "added": len(request.samples),
+        "buffered": len(session.audio_buffer),
+    }
+
+
+@app.get("/sessions/{session_id}/audio")
+def fetch_session_audio(session_id: str, max_samples: int | None = None):
+    try:
+        samples = sessions.audio_samples(session_id, max_samples=max_samples)
+        session = sessions.get(session_id)
+    except KeyError as exc:  # pragma: no cover - exercised via API tests
+        _translate_session_error(exc)
+
+    metrics.counter("sessions.audio.fetch.calls").inc()
+
+    return {
+        "session_id": session.session_id,
+        "samples": samples,
+        "returned": len(samples),
+        "buffered": len(session.audio_buffer),
     }
 
 

@@ -22,9 +22,10 @@ class HTTPException(Exception):
 
 
 class Request:
-    def __init__(self, headers: Optional[Dict[str, str]] = None, url: Optional[str] = None):
+    def __init__(self, headers: Optional[Dict[str, str]] = None, url: Optional[str] = None, query_params=None):
         self.headers = {k.lower(): v for k, v in (headers or {}).items()}
         self.url = SimpleNamespace(path=url or "")
+        self.query_params = query_params or {}
 
 
 class Response:
@@ -96,8 +97,16 @@ class FastAPI:
         raise ValueError(f"Route not found: {method} {path}")
 
     async def _dispatch(self, method: str, path: str, headers: Dict[str, str], body: Any = None) -> Response:
-        route, path_params = self._find_route(method, path)
-        request = Request(headers=headers, url=path)
+        clean_path, query_params = path.split("?", 1) if "?" in path else (path, "")
+        query: Dict[str, str] = {}
+        if query_params:
+            for pair in query_params.split("&"):
+                if "=" in pair:
+                    key, value = pair.split("=", 1)
+                    query[key] = value
+
+        route, path_params = self._find_route(method, clean_path)
+        request = Request(headers=headers, url=clean_path, query_params=query)
         request.path_params = path_params
 
         async def endpoint(_: Request) -> Response:
@@ -105,8 +114,8 @@ class FastAPI:
             parsed = body
             signature = inspect.signature(handler)
             params = list(signature.parameters.values())
+            type_hints = get_type_hints(handler)
             if body is not None and params:
-                type_hints = get_type_hints(handler)
                 model_annotation = next(
                     (
                         type_hints.get(param.name, param.annotation)
@@ -123,6 +132,21 @@ class FastAPI:
             for param in params:
                 if param.name in path_params:
                     args.append(path_params[param.name])
+                elif param.name in request.query_params:
+                    hinted = type_hints.get(param.name, param.annotation)
+                    value = request.query_params[param.name]
+                    try:
+                        if hinted in (int, float):
+                            casted = hinted(value)
+                        elif getattr(hinted, "__origin__", None) is None and hasattr(hinted, "__args__"):
+                            # handle Optional[int] / Optional[float]-like unions
+                            inner = next((t for t in hinted.__args__ if t in (int, float)), None)
+                            casted = inner(value) if inner else value
+                        else:
+                            casted = value
+                    except Exception:  # pragma: no cover - defensive fallback
+                        casted = value
+                    args.append(casted)
                 elif parsed is not None:
                     args.append(parsed)
                     parsed = None  # only consume once
