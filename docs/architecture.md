@@ -562,12 +562,39 @@ For each PR above, enforce the following reviewable outputs to keep quality meas
 - **Rollout levers:** support staged rollouts by cohort (percent, device class, or OS); keep a “kill switch” feature flag per major component (STT model, diarization model, updater) with rollback tested pre-release.
 - **Change approval:** require security + privacy sign-off for changes touching consent, retention, or remote processing; require performance sign-off for model swaps that affect latency/resource budgets.
 
+## Operational Dashboards and Queries
+- **Executive/health overview:** crash-free sessions, DER/WER deltas vs. baseline, STT/TTS latency p50/p95, and updater success rate; default to privacy-scrubbed views for demos.
+- **Capture & streaming:** VAD trigger counts/false-positive ratio, buffer depth over time, gRPC resend/backoff counters, and Android battery/thermal overlays.
+- **Model quality:** WER/DER by model hash, diarization trust score distribution, spoof/liveness failure rates, pronunciation regression status for common Farsi names, and summary faithfulness distribution with citation coverage.
+- **Storage & retention:** disk usage vs. quotas, retention sweeper throughput, quarantined segment backlog, and encryption-key rotation age; alert when retention jobs miss their window.
+- **Release promotion:** canary vs. stable comparison of latency/DER/WER, error budget burn-down, and rollout cohort success; auto-generate a “ready to promote?” panel tied to the Definition of Done items.
+- **Sample queries/templates:**
+  - “Sessions with DER drift > 5% from baseline in past 24h by model hash.”
+  - “Retention sweeps that skipped artifacts due to policy mismatch” with a link to remediation steps.
+  - “Top 10 devices by crash frequency after last update” filtered by GPU/driver to isolate regressions.
+
 ## Definition of Done for the program
 - All PR-specific acceptance criteria satisfied with linked artifacts (metrics snapshots, screenshots, logs, or recordings).
 - Production readiness checklist items have passing evidence for the current target platforms (Windows/macOS/Linux, optional Android thin client).
 - Release candidate built from a reproducible pipeline with signed outputs and published SBOM/attestations.
 - Rollback path verified (previous stable build install + data compatibility) and documented in the release notes.
 - Support channels prepared (in-app feedback, crash diagnostics, runbook links) and ownership on-call rotation confirmed.
+
+## Runbook Templates and SOPs
+- **Incident response:** standardize a one-page responder checklist (verify privacy curtain engaged, stop capture if in doubt, capture metrics snapshot, and open feature-flag kill switch if DER/WER/latency breaches SLOs). Include a templated user-facing status update for Sev-1/Sev-2.
+- **Smoke-test failure triage:** steps to re-run the bundled fixture, validate model signatures/checksums, rotate caches, and collect the diagnostics ZIP with PII redaction enabled by default.
+- **Updater issues:** path to roll back to previous signed installer, verify SBOM/attestation, and clear partial downloads; include per-OS commands and expected log markers.
+- **Data subject requests:** script snippets to enumerate artifacts per speaker ID, purge embeddings/transcripts, re-run anonymized diarization, and regenerate audit receipts; include a verification checklist before closure.
+- **Support handoff:** structured ticket template with reproduction steps, policy version, model hashes, consent receipt IDs, and recent smoke-test results to reduce back-and-forth.
+
+## Data Lifecycle Playbook
+- **States:** capture → transient buffers → encrypted storage (segments/artifacts) → retention sweeper → archival/quarantine → deletion/anonymization.
+- **Guards per state:**
+  - **Capture/transient:** VAD gating, privacy curtain toggle, and hot-mic indicator; never write unencrypted temp files.
+  - **Storage:** enforce per-tenant encryption keys, checksum verification on writes, and policy-version tagging for imports/exports.
+  - **Quarantine/archival:** isolate low-confidence diarization segments; require dual-approval (user + admin) before inclusion in exports; auto-expire quarantine after review window.
+  - **Deletion/anonymization:** retention sweeps run with dry-run + applied modes; audit log keeps minimal pointers, and re-embeddings are triggered to remove purged speaker vectors.
+- **Lifecycle validation:** CI job that replays a mini meeting through each state (including quarantine) and asserts expected artifacts exist/are removed with correct policy hashes. Attach the report to the release ticket.
 
 ## Alternatives
 - Cross-platform via **Electron + Node** with Python backend if web tech is preferred.
