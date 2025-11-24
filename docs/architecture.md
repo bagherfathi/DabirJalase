@@ -116,6 +116,38 @@
 - Add watchdogs for stalled streams: if no transcript arrives in N seconds, recycle gRPC stream and alert the user.
 - Auto-rotate diarization galleries when embeddings are stale (>90 days) or exceed size thresholds; prompt to archive rarely seen speakers.
 
+
+## Data Model & Storage Details
+- **SQLite schema (desktop):**
+  - `speakers(id INTEGER PK, name TEXT, embedding BLOB, embedding_version TEXT, created_at, updated_at, consent_version TEXT)`
+  - `meetings(id INTEGER PK, started_at, ended_at, policy_version TEXT, device_id TEXT, noise_profile_id TEXT)`
+  - `segments(id INTEGER PK, meeting_id FK, speaker_id FK NULLABLE, start_ms INTEGER, end_ms INTEGER, transcript TEXT, confidence REAL, audio_path TEXT, quarantine BOOLEAN DEFAULT FALSE)`
+  - `summaries(meeting_id FK, markdown TEXT, html TEXT, pdf_path TEXT, faithfulness_score REAL)`
+  - `audit(id INTEGER PK, meeting_id FK NULLABLE, actor TEXT, action TEXT, payload JSON, created_at)`
+- **Noise profiles:** stored per device ID with checksum; revalidated on startup and rotated if device driver version changes.
+- **Backups/exports:** compress SQLite + media + embeddings into a tarball with manifest: policy version, model versions, hashes. Reject imports when manifest version is lower than current minimum supported.
+- **Cloud/remote mode:** swap SQLite for Postgres; enforce row-level encryption on sensitive columns (embeddings, transcripts) using application-layer keys derived from the user keystore.
+
+## Install, Update, and Packaging
+- **Install smoke test:** after installation, run the bundled 5-second Farsi fixture through VAD → STT → diarization, produce a mini HTML report, and surface a pass/fail badge in the UI’s About dialog.
+- **Updaters:** use differential updates for the Java app (jpackage or custom patcher) and a **model asset updater** that fetches only new weights; validate with checksum + signature. Block app launch if asset verification fails until user retries or reverts.
+- **Permissions prompts:** first launch should explicitly request microphone permission, keychain/keystore use, and consent to audit logging; cache decisions and allow revocation from settings.
+- **Android thin client:** ship an optional asset pack with the small offline Vosk + VITS models; defer Whisper downloads to Wi-Fi only.
+- **Crash recovery:** installer drops a `diagnostics` CLI that can collect logs, recent crash dumps, and the latest smoke-test report into a ZIP for support (PII-scrubbed by default).
+
+## Evaluation & Benchmarks
+- **Performance baselines (desktop GPU):** first-token latency < 800 ms, median transcription E2E latency < 2.5 s, DER < 10% on 2-speaker noisy mix, and TTS time-to-first-byte < 700 ms with Azure Farsi; publish dashboards and fail CI if drift >10%.
+- **Resource usage ceilings:** CPU < 250% and RAM < 3.5 GB for the Python sidecar during typical 2-speaker calls; trigger backpressure when approaching ceilings.
+- **Energy/battery checks (Android):** STT/diarization runs capped at 20% battery drain per hour; suspend background upload if below 15% battery unless on charger.
+- **Ethics/consent:** verify UI flows in screenshots to ensure consent banner and “forget speaker” controls are present; mandate locale-aware RTL layout snapshots in CI for Farsi.
+
+## Failure & Recovery Playbook
+- **Streaming interruptions:** recycle gRPC channels on heartbeat loss; queue up to N segments locally with exponential backoff retries; surface a “Resending…” badge per segment.
+- **Model load failures:** fallback to smaller local models and raise a UI banner indicating degraded quality; log model version and checksum for support.
+- **Diarization drift:** if DER spikes beyond threshold in live metrics, temporarily disable gallery writes and revert to anonymous speaker tags until drift clears; prompt user to re-run noise calibration.
+- **Storage pressure:** enforce quotas; when disk space < 10%, automatically purge expired audio first, then quarantined segments, while preserving audit logs unless the user opts in to purge.
+- **Policy mismatches:** when importing archives with older policy versions, present a reconciliation wizard to re-collect consent and re-embed speakers before activation.
+
 ## MVP Implementation Steps
 1. Scaffold JavaFX app with audio capture + VAD and a chat-style transcript panel.
 2. Create Python gRPC service exposing STT (Whisper), diarization (pyannote), TTS (vendor/local), and summarization endpoints.
