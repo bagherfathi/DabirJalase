@@ -532,6 +532,36 @@ For each PR above, enforce the following reviewable outputs to keep quality meas
   - Structured logs cover critical paths (capture, streaming, inference, summarization, retention sweeps) with redaction rules proven in tests.
   - Support runbook linked to log keys, metrics, and feature flags used for triage/rollback.
 
+## Post-Release Monitoring and Maintenance
+- **Early-life support (ELS):** first two weeks after a release require daily checks of crash rates, DER/WER drift, and update failures. Maintain an ELS dashboard pinned in the runbook with pager thresholds tighter than steady state.
+- **Telemetry review cadence:** weekly quality review using anonymized/opt-in metrics: STT latency, DER/WER, VAD false triggers, TTS cache hit rate, and summary faithfulness declines. File tickets for any metric outside the control band and tag the affected model/config versions.
+- **Customer issue triage:** route reports into severity buckets with clock-start times; Sev-1 must receive human acknowledgment within 30 minutes during support hours and within 2 hours off-hours. Publish RCA and fix ETA inside the in-app “system status” pane.
+- **Patch release policy:** for Sev-1/Sev-2 defects, ship a hotfix within 72 hours with a minimal diff, updated smoke-test artifact, and regression proof. For Sev-3/Sev-4, batch fixes into the next scheduled release and document known issues.
+- **Deprecation & support window:** maintain compatibility matrix per OS/Java/Python/driver version; support N-1 major releases and security fixes for N-2. Announce deprecations 60 days in advance in-app and in release notes.
+- **Backlog hygiene:** require tagged owners and dates for every follow-up from chaos drills, RCAs, or ELS incidents; enforce SLA for closure (Sev-1 follow-ups closed or re-justified within 14 days).
+- **Health budgets:** allocate explicit budgets for crash-free sessions, DER/WER regressions, and update failures; if exceeded, freeze feature flags and prioritize stability fixes before new work.
+
+## Security and Vulnerability Response
+- **Vulnerability intake:** monitor CVE feeds for pinned dependencies and upstream models weekly; run automated scans (SCA + container image) per build. Log findings with severity and exposure assessment (local-only vs. remote exploit).
+- **Remediation timelines:** critical/remote exploitable issues patched within 48 hours; high within 7 days; medium within 30 days. Document mitigations (feature flags, policy blocks) while patches propagate.
+- **Coordinated disclosure:** maintain a `SECURITY.md` contact path; acknowledge within 48 hours and provide status updates until fix. Credit reporters in release notes when applicable.
+- **Exploit detection:** add heuristics for repeated enrollment attempts, malformed gRPC payloads, and abnormal SSML markup; trigger rate limits and require re-authentication for enterprise mode.
+- **Forensics & preservation:** on suspected compromise, freeze telemetry uploads, preserve signed logs/metrics snapshots with hashes, and collect memory-safe crash dumps for offline analysis; ensure consent/audit data remains encrypted.
+
+## Compatibility and Migration Policy
+- **Support matrix:** publish and version a table of supported OS versions, Java runtimes, GPU drivers, and Python/PyTorch stacks. Block install/upgrade when outside the matrix unless the user explicitly bypasses with a warning banner.
+- **Forward/ backward data compatibility:** keep schema migrations additive by default; require dual-read adapters for at least one release when removing columns or changing policy defaults. Include automated compatibility tests that load last two release manifests and run smoke tests.
+- **Model compatibility:** annotate embeddings and diarization outputs with model version/hash; provide an auto-upgrade path that re-embeds galleries in the background and a rollback path that keeps prior vectors until verification completes.
+- **Config drift detection:** compare packaged defaults, enterprise overrides, and user-level configs at startup; surface a “drift report” with remediation actions (reset to default, accept enterprise override, or keep local deviation with risk badge).
+- **Export/import guarantees:** version export manifests and enforce forward-compatibility shims for at least two minor releases; provide a validator CLI that checks manifests before import to avoid partial restores.
+
+## Release Communication and Change Control
+- **Audience-specific notes:** ship concise release summaries for end users (UX/policy changes), admins (config/policy/telemetry impacts), and developers (API/SDK breaking changes). Localize Farsi/English and store offline.
+- **In-app announcements:** display a dismissible banner for material changes (new retention defaults, new consent prompts, deprecations) with a link to the full notes and a “remind me later” snooze.
+- **Experiment/A-B guardrails:** document every experiment with target metrics, stop conditions, and blast radius; auto-disable experiments if error budgets are exceeded or if opt-in rates fall below expectations.
+- **Rollout levers:** support staged rollouts by cohort (percent, device class, or OS); keep a “kill switch” feature flag per major component (STT model, diarization model, updater) with rollback tested pre-release.
+- **Change approval:** require security + privacy sign-off for changes touching consent, retention, or remote processing; require performance sign-off for model swaps that affect latency/resource budgets.
+
 ## Definition of Done for the program
 - All PR-specific acceptance criteria satisfied with linked artifacts (metrics snapshots, screenshots, logs, or recordings).
 - Production readiness checklist items have passing evidence for the current target platforms (Windows/macOS/Linux, optional Android thin client).
