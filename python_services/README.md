@@ -29,6 +29,10 @@ Replace these with durable storage/queue-backed flows when wiring the production
 
 - Run a deterministic end-to-end flow (create session → diarize → label speakers → summarize → export) without hitting the API via `python -m python_services.scripts.demo_session`. Add `--persist ./data/exports` to write the manifest to disk for inspection.
 
+### In-process smoke test
+
+- Validate the stitched API without running a server by executing `python -m python_services.ops.smoke`. The harness exercises session creation, diarization, speaker labeling, summary, export, persistence, and retrieval. Override with `--api-key` or `--storage-dir` to mirror deployment settings.
+
 ### Access control and traceability
 
 - Requests include an `x-request-id` header (configurable via `PY_SERVICES_REQUEST_ID_HEADER`) so clients can correlate logs and responses.
