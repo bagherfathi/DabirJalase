@@ -142,6 +142,13 @@ class VadRequest(BaseModel):
     min_run: int = 3
 
 
+class SessionIngestRequest(BaseModel):
+    samples: List[float]
+    threshold: float = 0.01
+    min_run: int = 3
+    transcript_hint: str = "speech detected"
+
+
 def _translate_session_error(exc: KeyError):
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -166,6 +173,49 @@ def run_vad(request: VadRequest):
     spans: List[SpeechSpan] = detect_speech(request.samples, threshold=request.threshold, min_run=request.min_run)
     metrics.counter("vad.calls").inc()
     return {"triggered": bool(spans), "segments": [span.asdict() for span in spans]}
+
+
+@app.post("/sessions/{session_id}/ingest")
+def ingest_session_audio(session_id: str, request: SessionIngestRequest):
+    if request.min_run < 1:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="min_run must be >= 1")
+
+    spans: List[SpeechSpan] = detect_speech(request.samples, threshold=request.threshold, min_run=request.min_run)
+    metrics.counter("sessions.ingest.calls").inc()
+
+    if not spans:
+        return {
+            "session_id": session_id,
+            "triggered": False,
+            "spans": [],
+            "segments": [],
+            "new_speakers": [],
+        }
+
+    try:
+        session = sessions.get(session_id)
+    except KeyError as exc:  # pragma: no cover - exercised via API tests
+        _translate_session_error(exc)
+
+    span_descriptions = [f"speech {span.start_index}-{span.end_index}" for span in spans]
+    transcript_text = request.transcript_hint.strip() or "speech detected"
+    transcript_text = f"{transcript_text}: {'; '.join(span_descriptions)}"
+
+    transcript = stt.transcribe(transcript_text, language=session.language)
+    diarized = diarization.diarize(transcript)
+    manifest = TranscriptManifest.from_diarized(
+        transcript_id=session_id, language=transcript.language, segments=diarized
+    )
+
+    session, new_speakers = sessions.append(session_id, manifest.segments)
+
+    return {
+        "session_id": session.session_id,
+        "triggered": True,
+        "spans": [span.asdict() for span in spans],
+        "segments": session.serialized_segments(),
+        "new_speakers": new_speakers,
+    }
 
 
 @app.post("/diarize")

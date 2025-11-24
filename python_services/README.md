@@ -16,6 +16,7 @@ To keep the scaffold product-shaped, a minimal in-memory session orchestrator st
 
 - `POST /sessions` — create a session id and language
 - `POST /sessions/append` — run placeholder STT + diarization and append segments to the session, returning any newly seen speakers
+- `POST /sessions/{id}/ingest` — run deterministic VAD over provided samples; when speech spans fire, append diarized segments to the session using a transcript hint
 - `POST /sessions/{id}/speakers` — label an unlabeled speaker id with a friendly name (for "who is this?" prompts)
 - `POST /sessions/{id}/speakers/forget` — redact a speaker’s text and clear their display name (privacy/DSR helper)
 - `GET /sessions/{id}` — fetch timeline segments with speaker labels where available
