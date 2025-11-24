@@ -19,6 +19,7 @@ To keep the scaffold product-shaped, a minimal in-memory session orchestrator st
 - `POST /sessions/{id}/ingest` — run deterministic VAD over provided samples; when speech spans fire, append diarized segments to the session using a transcript hint
 - `POST /sessions/{id}/audio` — append raw audio samples to the session buffer with optional trimming so capture clients can stage chunks before diarization
 - `GET /sessions/{id}/audio` — fetch buffered samples (optionally capped) to validate capture plumbing ahead of streaming
+- `POST /sessions/{id}/process_buffer` — run VAD over the staged buffer, append diarized segments using a transcript hint, and optionally clear the buffer once stitched
 - `POST /sessions/{id}/speakers` — label an unlabeled speaker id with a friendly name (for "who is this?" prompts)
 - `POST /sessions/{id}/speakers/forget` — redact a speaker’s text and clear their display name (privacy/DSR helper)
 - `GET /sessions/{id}` — fetch timeline segments with speaker labels where available

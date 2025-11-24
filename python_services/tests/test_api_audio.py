@@ -62,3 +62,41 @@ def test_audio_append_missing_session(monkeypatch):
 
     response = client.post("/sessions/missing/audio", json={"samples": [0.1]})
     assert response.status_code == 404
+
+
+def test_process_buffer_appends_segments_and_clears(monkeypatch):
+    server = reload_server(monkeypatch)()
+    client = TestClient(server.app)
+
+    client.post("/sessions", json={"session_id": "s3"})
+    client.post("/sessions/s3/audio", json={"samples": [0.0, 0.05, 0.04, 0.0]})
+
+    process_response = client.post(
+        "/sessions/s3/process_buffer",
+        json={"threshold": 0.03, "min_run": 2, "transcript_hint": "buffered speech", "clear_buffer": True},
+    )
+
+    assert process_response.status_code == 200
+    payload = process_response.json()
+    assert payload["triggered"] is True
+    assert payload["spans"] == [{"start_index": 1, "end_index": 2}]
+    assert any("buffered speech" in segment["text"] for segment in payload["segments"])
+    assert payload["buffered"] == 0
+
+
+def test_process_buffer_handles_silence(monkeypatch):
+    server = reload_server(monkeypatch)()
+    client = TestClient(server.app)
+
+    client.post("/sessions", json={"session_id": "s4"})
+    client.post("/sessions/s4/audio", json={"samples": [0.0, 0.0, 0.0]})
+
+    process_response = client.post(
+        "/sessions/s4/process_buffer", json={"threshold": 0.1, "min_run": 2, "transcript_hint": "quiet"}
+    )
+
+    assert process_response.status_code == 200
+    payload = process_response.json()
+    assert payload["triggered"] is False
+    assert payload["segments"] == []
+    assert payload["buffered"] == 3

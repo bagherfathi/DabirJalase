@@ -154,6 +154,13 @@ class SessionAudioAppendRequest(BaseModel):
     trim_to: int | None = None
 
 
+class ProcessBufferRequest(BaseModel):
+    threshold: float = 0.01
+    min_run: int = 3
+    transcript_hint: str = "buffered audio"
+    clear_buffer: bool = False
+
+
 def _translate_session_error(exc: KeyError):
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -259,6 +266,36 @@ def fetch_session_audio(session_id: str, max_samples: int | None = None):
         "session_id": session.session_id,
         "samples": samples,
         "returned": len(samples),
+        "buffered": len(session.audio_buffer),
+    }
+
+
+@app.post("/sessions/{session_id}/process_buffer")
+def process_session_buffer(session_id: str, request: ProcessBufferRequest):
+    if request.min_run < 1:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="min_run must be >= 1")
+
+    try:
+        session, spans, new_speakers = sessions.process_audio_buffer(
+            session_id,
+            stt,
+            diarization,
+            threshold=request.threshold,
+            min_run=request.min_run,
+            transcript_hint=request.transcript_hint,
+            clear_buffer=request.clear_buffer,
+        )
+    except KeyError as exc:  # pragma: no cover - exercised via API tests
+        _translate_session_error(exc)
+
+    metrics.counter("sessions.process_buffer.calls").inc()
+
+    return {
+        "session_id": session.session_id,
+        "triggered": bool(spans),
+        "spans": [span.asdict() for span in spans],
+        "segments": session.serialized_segments(),
+        "new_speakers": new_speakers,
         "buffered": len(session.audio_buffer),
     }
 

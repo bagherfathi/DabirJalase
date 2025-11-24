@@ -14,6 +14,7 @@ from typing import Dict, List, Tuple
 from python_services.diarization.diarization_service import DiarizedSegment
 from python_services.storage.manifests import SegmentRecord, SessionExport
 from python_services.summarization.summarizer import Summary
+from python_services.vad.simple_vad import SpeechSpan, detect_speech
 
 
 @dataclass
@@ -74,6 +75,9 @@ class Session:
             return list(self.audio_buffer)
 
         return self.audio_buffer[-max_samples:]
+
+    def clear_audio(self) -> None:
+        self.audio_buffer = []
 
     def export(self, summarizer) -> SessionExport:
         summary = self.summary(summarizer)
@@ -153,6 +157,37 @@ class SessionStore:
 
     def audio_samples(self, session_id: str, max_samples: int | None = None) -> List[float]:
         return self.get(session_id).audio_samples(max_samples=max_samples)
+
+    def process_audio_buffer(
+        self,
+        session_id: str,
+        stt_service,
+        diarization_service,
+        threshold: float = 0.01,
+        min_run: int = 3,
+        transcript_hint: str = "buffered audio",
+        clear_buffer: bool = False,
+    ) -> Tuple[Session, List[SpeechSpan], List[str]]:
+        session = self.get(session_id)
+
+        spans = detect_speech(session.audio_buffer, threshold=threshold, min_run=min_run)
+        if not spans:
+            return session, spans, []
+
+        transcript_text = transcript_hint.strip() or "buffered audio"
+        span_descriptions = [f"buffer {span.start_index}-{span.end_index}" for span in spans]
+        transcript = stt_service.transcribe(
+            f"{transcript_text}: {'; '.join(span_descriptions)}", language=session.language
+        )
+        diarized = diarization_service.diarize(transcript)
+        manifest_segments = [DiarizedSegment(speaker=s.speaker, text=s.text) for s in diarized]
+
+        session, new_speakers = self.append(session_id, manifest_segments)
+
+        if clear_buffer:
+            session.clear_audio()
+
+        return session, spans, new_speakers
 
     def delete(self, session_id: str) -> None:
         if session_id not in self._sessions:
