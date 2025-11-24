@@ -7,6 +7,7 @@ product is built out.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 
@@ -17,6 +18,8 @@ class ServiceSettings:
     port: int = 8000
     reload: bool = False
     log_level: str = "info"
+    api_key: str | None = None
+    request_id_header: str = "x-request-id"
 
     @classmethod
     def from_env(cls) -> "ServiceSettings":
@@ -36,5 +39,16 @@ class ServiceSettings:
             port=int(os.getenv("PY_SERVICES_PORT", cls.port)),
             reload=as_bool(os.getenv("PY_SERVICES_RELOAD", str(cls.reload)), cls.reload),
             log_level=os.getenv("PY_SERVICES_LOG_LEVEL", cls.log_level),
+            api_key=os.getenv("PY_SERVICES_API_KEY"),
+            request_id_header=os.getenv("PY_SERVICES_REQUEST_ID_HEADER", cls.request_id_header),
         )
+
+
+def configure_logging(level: str) -> None:
+    """Apply a simple logging configuration for the service."""
+
+    logging.basicConfig(
+        level=level.upper(),
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    )
 

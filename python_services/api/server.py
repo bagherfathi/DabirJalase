@@ -6,12 +6,15 @@ diarization pipelines when models are available.
 """
 from __future__ import annotations
 
+import logging
+import uuid
 from dataclasses import asdict
 from typing import List
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request, status
 from pydantic import BaseModel
 
+from python_services.config import ServiceSettings
 from python_services.diarization.diarization_service import DiarizationService
 from python_services.ops.metrics import MetricsRegistry
 from python_services.sessions import SessionStore
@@ -20,7 +23,25 @@ from python_services.stt.whisper_service import Transcript, WhisperService
 from python_services.summarization.summarizer import Summarizer
 from python_services.tts.tts_service import TextToSpeechService
 
+settings = ServiceSettings.from_env()
+logger = logging.getLogger("python_services.api")
+
 app = FastAPI(title="Meeting Assistant Services")
+
+
+@app.middleware("http")
+async def enforce_security(request: Request, call_next):
+    request_id = request.headers.get(settings.request_id_header) or str(uuid.uuid4())
+
+    if settings.api_key:
+        provided = request.headers.get("x-api-key")
+        if provided != settings.api_key:
+            logger.warning("rejecting request: missing or invalid API key", extra={"path": request.url.path})
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid api key")
+
+    response = await call_next(request)
+    response.headers[settings.request_id_header] = request_id
+    return response
 
 stt = WhisperService()
 diarization = DiarizationService()
