@@ -111,6 +111,13 @@
 - Keep **profiling presets** (desktop GPU, desktop CPU, Android streaming) and attach flamegraph captures to regression runs to catch bottlenecks in audio pipelines, protobuf serialization, and UI rendering.
 - Maintain a **metrics dictionary** (metric name, units, owner, alert thresholds) in source control to avoid drift between code, dashboards, and runbook.
 
+## Network & Media Pipeline Hardening
+- Prefer **WASAPI loopback** (Windows), **CoreAudio** (macOS), and **PulseAudio/PipeWire** (Linux) capture paths; ship a compatible mode that records raw PCM if platform bindings fail.
+- Keep **audio clock drift correction** between Java capture and Python processing by resampling slowly (e.g., SpeexDSP) and aligning by RTP-style sequence numbers to avoid lip-sync drift in longer meetings.
+- Throttle upload bitrate for thin Android clients on unstable networks; prioritize **transcription-critical** frames and defer low-importance telemetry until stable connectivity resumes.
+- For remote/cloud Python services, enable **TLS session resumption** and compressed protobuf payloads; fall back to plain JSON over HTTPS if intermediaries block gRPC.
+- Add **file format validators** on ingest (sample rate, channel count, duration limits) to reject corrupted captures before STT/diarization runs.
+
 ## Resilience & Offline Behavior
 - Cache critical assets (fonts, UI strings, offline models) to allow **air-gapped transcription** with degraded accuracy.
 - When Python service is unreachable, queue audio locally and retry; surface backlog status in the UI.
@@ -118,6 +125,16 @@
 - For intermittent connectivity on Android thin client, persist captured PCM chunks and **upload with checksum validation** when a connection resumes.
 - Add watchdogs for stalled streams: if no transcript arrives in N seconds, recycle gRPC stream and alert the user.
 - Auto-rotate diarization galleries when embeddings are stale (>90 days) or exceed size thresholds; prompt to archive rarely seen speakers.
+
+## Governance, Compliance, and Data Handling
+- Maintain a **data inventory** (tables, fields, retention, lawful basis) alongside the schema; generate it automatically from the migration definitions to reduce drift.
+- Provide **data residency controls**: allow users to pin storage to local-only, specific drives, or managed cloud buckets; refuse cross-region uploads when a residency policy is active.
+- Ship a **consent receipt** per speaker prompt (timestamp, device ID, policy version) and bundle it with exports so re-imports can re-establish lawful basis.
+- Add **pseudonymization mode** that replaces speaker names with stable hashes for shared transcripts, keeping the mapping locally encrypted.
+- Include **child-voice safeguards**: if diarization detects high-pitch + short utterances indicative of minors, gate cloud processing and require explicit consent before export.
+- Run a **DPIA-style checklist** in CI: encryption at rest/on wire present, retention defaults non-zero, consent prompts visible in screenshots, and audit log storage enabled.
+- Document **third-party subprocessor list** (cloud TTS/STT providers) and expose toggles to disable them globally.
+- Provide a **right-to-erasure workflow** that scrubs embeddings, audio, transcripts, summaries, and audit entries linked to a speaker ID while keeping aggregate metrics intact.
 
 ## Configuration, Secrets, and Policy Management
 - **Configuration layers:** default config in repo → packaged overrides per OS → user-level overrides in `~/.meeting-transcriber/config.toml`; use explicit schema validation and reject unknown keys.
@@ -137,6 +154,14 @@
 - **Noise profiles:** stored per device ID with checksum; revalidated on startup and rotated if device driver version changes.
 - **Backups/exports:** compress SQLite + media + embeddings into a tarball with manifest: policy version, model versions, hashes. Reject imports when manifest version is lower than current minimum supported.
 - **Cloud/remote mode:** swap SQLite for Postgres; enforce row-level encryption on sensitive columns (embeddings, transcripts) using application-layer keys derived from the user keystore.
+
+## Release, Testing, and Promotion
+- **CI gate:** run VAD precision/recall, STT WER, DER, TTS latency, and summary faithfulness checks on every merge; block releases when deltas exceed SLOs, and attach artifacts (waveforms, alignments, HTML reports) to the pipeline summary.
+- Maintain a **hardware matrix** (CPU-only, mid-tier GPU, Android mid/high) with scheduled nightly runs to catch regression in utilization, thermal limits, and battery consumption.
+- Add **fuzz tests** for protobuf/gRPC stream handling and truncated PCM frames to prevent crashes on malformed input.
+- Run **determinism checks** for offline models (Whisper/Vosk/Coqui) under fixed seeds; fail when weight drift or env updates change outputs beyond tolerance.
+- Ship **canary promotion rules**: require N sessions with equal-or-better WER/DER and p95 latency before flipping feature flag defaults; auto-rollback on elevated error budgets.
+- For **installer smoke tests**, publish baseline metrics and tolerances; record pass/fail + perf numbers into a local history DB so support can trace changes across app updates.
 
 ## Install, Update, and Packaging
 - **Install smoke test:** after installation, run the bundled 5-second Farsi fixture through VAD → STT → diarization, produce a mini HTML report, and surface a pass/fail badge in the UI’s About dialog.
