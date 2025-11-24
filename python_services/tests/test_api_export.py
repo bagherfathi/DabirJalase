@@ -31,3 +31,34 @@ def test_export_endpoint_returns_summary_and_labels():
     assert payload["summary"]["highlight"]
     assert payload["segments"][0]["speaker"] == speaker_id
     assert payload["segments"][0]["speaker_label"] == "Host"
+
+
+def test_export_store_and_fetch(tmp_path, monkeypatch):
+    import python_services.api.server as server
+
+    monkeypatch.setenv("PY_SERVICES_STORAGE_DIR", str(tmp_path))
+    reload(server)
+    server.sessions.clear()
+
+    client = TestClient(server.app)
+
+    created = client.post("/sessions", json={"session_id": "persist", "language": "fa"})
+    assert created.status_code == 200
+
+    appended = client.post("/sessions/append", json={"session_id": "persist", "transcript": "salam"})
+    assert appended.status_code == 200
+
+    stored = client.post("/sessions/persist/export/store")
+    assert stored.status_code == 200
+    saved_path = stored.json()["saved_path"]
+    assert str(tmp_path) in saved_path
+
+    listing = client.get("/exports")
+    assert listing.status_code == 200
+    assert listing.json()["exports"] == ["persist"]
+
+    fetched = client.get("/exports/persist")
+    assert fetched.status_code == 200
+    payload = fetched.json()
+    assert payload["session_id"] == "persist"
+    assert payload["summary"]["highlight"]

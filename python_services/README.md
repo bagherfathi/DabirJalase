@@ -19,6 +19,8 @@ To keep the scaffold product-shaped, a minimal in-memory session orchestrator st
 - `GET /sessions/{id}` — fetch timeline segments with speaker labels where available
 - `GET /sessions/{id}/summary` — summarize accumulated segments for the session
 - `GET /sessions/{id}/export` — export the full meeting manifest with speaker labels and a deterministic summary for download or archival
+- `POST /sessions/{id}/export/store` — export and persist the manifest to `PY_SERVICES_STORAGE_DIR` (defaults to `./data/exports`)
+- `GET /exports` — list stored export ids; `GET /exports/{id}` — fetch a stored export from disk
 
 Replace these with durable storage/queue-backed flows when wiring the production pipeline.
 
@@ -26,10 +28,11 @@ Replace these with durable storage/queue-backed flows when wiring the production
 
 - Requests include an `x-request-id` header (configurable via `PY_SERVICES_REQUEST_ID_HEADER`) so clients can correlate logs and responses.
 - Set `PY_SERVICES_API_KEY` to enforce a static API key; requests without the correct `x-api-key` will receive `401` responses so the scaffold can be exercised behind a gateway or tunnel.
+- Set `PY_SERVICES_STORAGE_DIR` to change where export manifests are written when using `/sessions/{id}/export/store`.
 
 ## Local development
 1. Create a virtualenv and install dependencies from `requirements.txt` (model extras can remain commented out in constrained environments).
-2. Run the API with `python -m python_services` (or override defaults with `PY_SERVICES_HOST`, `PY_SERVICES_PORT`, `PY_SERVICES_RELOAD`, `PY_SERVICES_LOG_LEVEL`).
+2. Run the API with `python -m python_services` (or override defaults with `PY_SERVICES_HOST`, `PY_SERVICES_PORT`, `PY_SERVICES_RELOAD`, `PY_SERVICES_LOG_LEVEL`, `PY_SERVICES_STORAGE_DIR`).
 3. Exercise the scaffold with `curl` or a REST client; responses are deterministic for easy testing.
 
 ## Next steps

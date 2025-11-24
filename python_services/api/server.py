@@ -18,6 +18,7 @@ from python_services.config import ServiceSettings
 from python_services.diarization.diarization_service import DiarizationService
 from python_services.ops.metrics import MetricsRegistry
 from python_services.sessions import SessionStore
+from python_services.storage import persistence
 from python_services.storage.manifests import SessionExport, TranscriptManifest
 from python_services.stt.whisper_service import Transcript, WhisperService
 from python_services.summarization.summarizer import Summarizer
@@ -142,6 +143,38 @@ def summarize_session(session_id: str):
 def export_session(session_id: str):
     exported: SessionExport = sessions.export(session_id, summarizer)
     metrics.counter("sessions.export").inc()
+    return {
+        "session_id": exported.session_id,
+        "created_at": exported.created_at.isoformat(),
+        "language": exported.language,
+        "segments": [asdict(segment) for segment in exported.segments],
+        "summary": {"highlight": exported.summary.highlight, "bullet_points": exported.summary.bullet_points},
+    }
+
+
+@app.post("/sessions/{session_id}/export/store")
+def export_and_store(session_id: str):
+    exported: SessionExport = sessions.export(session_id, summarizer)
+    saved_path = persistence.save_export(exported, settings.storage_dir)
+    metrics.counter("sessions.export.store").inc()
+    return {"session_id": exported.session_id, "saved_path": str(saved_path)}
+
+
+@app.get("/exports")
+def list_stored_exports():
+    session_ids = persistence.list_exports(settings.storage_dir)
+    metrics.counter("exports.list").inc()
+    return {"exports": session_ids}
+
+
+@app.get("/exports/{session_id}")
+def fetch_stored_export(session_id: str):
+    try:
+        exported = persistence.load_export(session_id, settings.storage_dir)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    metrics.counter("exports.load").inc()
     return {
         "session_id": exported.session_id,
         "created_at": exported.created_at.isoformat(),

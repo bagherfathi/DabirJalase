@@ -20,6 +20,7 @@ class ServiceSettings:
     log_level: str = "info"
     api_key: str | None = None
     request_id_header: str = "x-request-id"
+    storage_dir: str = "data"
 
     @classmethod
     def from_env(cls) -> "ServiceSettings":
@@ -41,6 +42,7 @@ class ServiceSettings:
             log_level=os.getenv("PY_SERVICES_LOG_LEVEL", cls.log_level),
             api_key=os.getenv("PY_SERVICES_API_KEY"),
             request_id_header=os.getenv("PY_SERVICES_REQUEST_ID_HEADER", cls.request_id_header),
+            storage_dir=os.getenv("PY_SERVICES_STORAGE_DIR", cls.storage_dir),
         )
 
 

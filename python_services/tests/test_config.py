@@ -9,6 +9,7 @@ def test_default_settings():
     assert settings.log_level == "info"
     assert settings.api_key is None
     assert settings.request_id_header == "x-request-id"
+    assert settings.storage_dir == "data"
 
 
 def test_env_overrides(monkeypatch):
@@ -18,6 +19,7 @@ def test_env_overrides(monkeypatch):
     monkeypatch.setenv("PY_SERVICES_LOG_LEVEL", "debug")
     monkeypatch.setenv("PY_SERVICES_API_KEY", "secret")
     monkeypatch.setenv("PY_SERVICES_REQUEST_ID_HEADER", "x-custom-id")
+    monkeypatch.setenv("PY_SERVICES_STORAGE_DIR", "/tmp/exports")
 
     settings = ServiceSettings.from_env()
 
@@ -27,4 +29,5 @@ def test_env_overrides(monkeypatch):
     assert settings.log_level == "debug"
     assert settings.api_key == "secret"
     assert settings.request_id_header == "x-custom-id"
+    assert settings.storage_dir == "/tmp/exports"
 
