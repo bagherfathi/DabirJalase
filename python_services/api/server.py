@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from python_services.diarization.diarization_service import DiarizationService
 from python_services.ops.metrics import MetricsRegistry
+from python_services.sessions import SessionStore
 from python_services.storage.manifests import TranscriptManifest
 from python_services.stt.whisper_service import Transcript, WhisperService
 from python_services.summarization.summarizer import Summarizer
@@ -25,6 +26,7 @@ stt = WhisperService()
 diarization = DiarizationService()
 tts = TextToSpeechService()
 summarizer = Summarizer()
+sessions = SessionStore()
 metrics = MetricsRegistry()
 
 
@@ -39,6 +41,16 @@ class SummarizeRequest(BaseModel):
 
 
 class SpeakerRequest(BaseModel):
+    transcript: str
+
+
+class SessionCreateRequest(BaseModel):
+    session_id: str
+    language: str = "fa"
+
+
+class SessionAppendRequest(BaseModel):
+    session_id: str
     transcript: str
 
 
@@ -68,6 +80,32 @@ def diarize(request: SpeakerRequest):
     )
     metrics.counter("diarize.calls").inc()
     return {"transcript_id": manifest.transcript_id, "segments": [asdict(s) for s in manifest.segments]}
+
+
+@app.post("/sessions")
+def create_session(request: SessionCreateRequest):
+    session = sessions.create(request.session_id, language=request.language)
+    metrics.counter("sessions.create").inc()
+    return {"session_id": session.session_id, "language": session.language, "segments": []}
+
+
+@app.post("/sessions/append")
+def append_to_session(request: SessionAppendRequest):
+    transcript = stt.transcribe(request.transcript)
+    diarized = diarization.diarize(transcript)
+    manifest = TranscriptManifest.from_diarized(
+        transcript_id=request.session_id, language=transcript.language, segments=diarized
+    )
+    session = sessions.append(request.session_id, manifest.segments)
+    metrics.counter("sessions.append").inc()
+    return {"session_id": session.session_id, "segments": [asdict(s) for s in session.segments]}
+
+
+@app.get("/sessions/{session_id}/summary")
+def summarize_session(session_id: str):
+    summary = sessions.summary(session_id, summarizer)
+    metrics.counter("sessions.summary").inc()
+    return {"highlight": summary.highlight, "bullet_points": summary.bullet_points}
 
 
 @app.post("/summarize")

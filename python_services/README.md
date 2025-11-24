@@ -9,6 +9,16 @@ Lightweight FastAPI-based services for transcription, diarization, TTS, and summ
 - `POST /summarize` — accepts `{ transcript, max_points }`, returns bullet points and a highlight
 - `POST /tts` — accepts `{ text, voice }`, returns base64-encoded payload
 
+### Session flow
+
+To keep the scaffold product-shaped, a minimal in-memory session orchestrator stitches the stubs together:
+
+- `POST /sessions` — create a session id and language
+- `POST /sessions/append` — run placeholder STT + diarization and append segments to the session
+- `GET /sessions/{id}/summary` — summarize accumulated segments for the session
+
+Replace these with durable storage/queue-backed flows when wiring the production pipeline.
+
 ## Local development
 1. Create a virtualenv and install dependencies from `requirements.txt` (model extras can remain commented out in constrained environments).
 2. Run the API with `python -m python_services` (or override defaults with `PY_SERVICES_HOST`, `PY_SERVICES_PORT`, `PY_SERVICES_RELOAD`, `PY_SERVICES_LOG_LEVEL`).
