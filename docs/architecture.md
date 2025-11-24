@@ -596,6 +596,39 @@ For each PR above, enforce the following reviewable outputs to keep quality meas
   - **Deletion/anonymization:** retention sweeps run with dry-run + applied modes; audit log keeps minimal pointers, and re-embeddings are triggered to remove purged speaker vectors.
 - **Lifecycle validation:** CI job that replays a mini meeting through each state (including quarantine) and asserts expected artifacts exist/are removed with correct policy hashes. Attach the report to the release ticket.
 
+## Product Build Blueprint (to ship without more “continue” prompts)
+- **Repository layout (initial scaffold):**
+  - `desktop-app/` (Java 21 + JavaFX): `app.Main`, `audio.CaptureService`, `audio.VadGate`, `transport.GrpcClient`, `ui.ChatTimeline`, `ui.SpeakerPrompt`, `storage/` (SQLite DAO + migration scripts), `security/` (keystore helpers, crypto utilities), `config/` (feature flags + policy bundles), `diagnostics/` (support bundle collector), and `tests/` (JUnit + TestFX screenshot baselines for RTL).
+  - `python-services/`: `stt/` (Whisper + Vosk fallback, fixtures + WER harness), `diarization/` (pyannote pipeline, spoof checks, gallery re-embedding jobs), `tts/` (Azure/Google/Coqui adapters + caching), `summarization/` (LLM wrappers with traceability), `api/` (gRPC/REST endpoints + auth), `storage/` (manifests + embeddings), `ops/` (metrics dictionary, health endpoints), `tests/` (PyTest + golden fixtures for STT/DER/summary faithfulness), `scripts/` (model download/signature verification).
+  - `docs/` (this architecture, SOPs, release notes), `tools/` (release/signing scripts, SBOM generator), `fixtures/` (Farsi multi-speaker clips + expected transcripts/DER), `ci/` (GitHub Actions/Jenkins pipelines with reproducible-build job and quarantine replay job).
+- **MVP definition (ship-quality product slice):**
+  - Desktop capture + VAD chunking → gRPC → Whisper + diarization → live chat UI with speaker prompts → summary export (Markdown) → keystore-backed encryption at rest → retention sweeper (configurable) → metrics/logging exposed → installer with smoke-test fixture verifying STT/DER thresholds.
+  - Acceptance gates: WER ≤ 15% and DER ≤ 10% on fixtures, p95 end-to-end latency ≤ 1.5s on reference GPU box, installer smoke test must pass, and privacy curtain + consent prompt shown before any remote processing.
+- **Build & delivery pipeline (single command per phase):**
+  - `ci/desktop.yml`: build with `mvn -Pjlink -DskipTests=false`, run JUnit/TestFX, package via `jpackage`, attach SBOM + signatures.
+  - `ci/python.yml`: `python -m pip install -r requirements.txt`, run PyTest + coverage, execute WER/DER/summary faithfulness harness on fixtures, publish gRPC stubs + Docker image with signed manifest.
+  - `ci/release.yml`: orchestrate both artifacts, verify checksums, run reproducible-build diff (two clean runs), and push release notes + readiness checklist artifacts.
+- **Incremental delivery (ready-to-start backlog):**
+  1. **Scaffold repos + fixtures** (CI green, model download/signature scripts, baseline smoke test).
+  2. **Audio capture + VAD + gRPC streaming** (desktop shell only) with buffered backpressure.
+  3. **STT + diarization pipeline** (Whisper + pyannote, gallery + spoof checks) with live chat UI and speaker prompts.
+  4. **TTS + playback + trust cues** (confidence/DER overlays, cached prompts) and privacy curtain toggle.
+  5. **Summaries + traceability + export** (Markdown/PDF) with faithfulness checks and citation links.
+  6. **Security/retention/audit** (encryption at rest, retention sweeper, forget-speaker flow, audit receipts, policy versioning).
+  7. **Installer + updater + support bundle** (jpackage, signed artifacts, rollback tested, diagnostic ZIP with redaction).
+  8. **Performance + resilience hardening** (profiling presets, offline queue, Android thin-client streaming, chaos drills).
+  9. **Accessibility/localization/UX polish** (RTL screenshots in CI, screen-reader labels, onboarding/help, feedback loop).
+  10. **Release candidate gating** (production readiness checklist, DoD verification, ELS dashboards live).
+- **Alpha → Beta → GA exit criteria:**
+  - **Alpha:** internal-only, fixtures passing, manual QA checklist satisfied for one OS, basic installer + rollback, telemetry off by default.
+  - **Beta:** cross-platform parity (Win/macOS/Linux), Android thin client streaming validated on mid-tier phone, retention sweeper + consent/audit flows proven, dashboards populated; opt-in telemetry allowed.
+  - **GA:** reproducible builds signed, support runbook + on-call rotation active, SLO monitoring + alerting live, policy bundles localized (Farsi/English), and upgrade/rollback rehearsed on two consecutive releases.
+- **Team roles (min staffing to finish):**
+  - **App/Platform:** JavaFX shell, installer/updater, diagnostics, accessibility, and feature-flag wiring.
+  - **Audio/ML:** STT/TTS/diarization pipelines, fixtures, WER/DER/latency harnesses, and profiling presets.
+  - **Security/Compliance:** keystore integration, consent/retention/audit, SBOM/signing, policy bundles, privacy curtain UX.
+  - **Ops/QA:** CI/CD, reproducible builds, dashboards/alerts, chaos drills, ELS monitoring, release notes, and support handoffs.
+
 ## Alternatives
 - Cross-platform via **Electron + Node** with Python backend if web tech is preferred.
 - Mobile option: reuse Python service in the cloud; Android app in Kotlin streams audio via WebRTC to backend.
