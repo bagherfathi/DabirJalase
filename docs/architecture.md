@@ -319,6 +319,27 @@
 - **Adversarial audio or spoofed enrollment:** enforce randomized enrollment phrases, run anti-spoof heuristics, and require user confirmation before updating trusted gallery entries.
 - **Resource exhaustion:** apply CPU/VRAM budgets per process; shed load by reducing VAD sensitivity and downgrading model sizes before dropping audio.
 
+## Dataset Governance and Continuous Evaluation
+- **Curation:** keep a tiered corpus (public, licensed, and customer-contributed under consent) with tags for dialect, noise type, device, and enrollment quality; ban redistribution of customer clips.
+- **Drift detection:** compare rolling WER/DER against a stable benchmark set monthly; flag regressions >2% absolute and gate promotions until addressed.
+- **Active learning:** surface low-confidence segments and diarization conflicts into a reviewer queue; approved relabels feed back into fine-tuning and fixture updates.
+- **Reproduction packs:** store the exact audio, model commit, config hash, and metrics for each benchmark run to allow reproducibility when investigating regressions.
+- **Data minimization:** auto-prune reviewer queues and training scratch space after N days; keep only derived metrics for long-term tracking.
+
+## Capacity Planning and Cost Controls
+- **GPU/CPU sizing:** publish reference instance types for cloud/remote sidecar (e.g., T4/L4 for GPU, 8 vCPU CPU-only) with expected session throughput and VRAM footprints per model size.
+- **Autoscaling:** scale Python workers on queue depth and GPU utilization; pre-warm a small pool during business hours and hibernate off-hours to cap cost.
+- **Model tiering:** prefer small/medium Whisper for short meetings or low-SNR scenarios; auto-upgrade to large models only when confidence is low and hardware budget allows.
+- **Egress and storage limits:** throttle export bandwidth, compress transcripts/audio in support bundles, and enforce per-tenant quotas with user-facing dashboards.
+- **Cost anomaly detection:** alert when cloud TTS/STT usage spikes beyond historical bounds or when cache hit rates drop, suggesting misconfiguration.
+
+## User Onboarding, Training, and Documentation
+- **First-run tour:** highlight microphone toggle, consent banner, speaker labeling flow, and privacy curtain; include RTL screenshots for Farsi users.
+- **Inline help:** tooltips on trust cues (confidence/DER), VAD status, and policy badges; link to the operational runbook for remediation steps.
+- **Role-based guidance:** ship separate quick-start guides for admins (policy/retention/config), reviewers (speaker relabel queues), and end users (capture + export).
+- **In-product checklists:** embed the manual QA/field validation checklist as a settings page with per-item status; allow exporting a signed completion report for audits.
+- **Feedback loop:** add an in-app “Was this transcript accurate?” prompt that logs anonymized spans + metrics to improve the evaluation corpus (opt-in, with PII stripping).
+
 ## Prompt Hygiene, Red-Teaming, and Safety
 - **Grounded prompting:** all LLM summarization prompts must include a structured transcript slice plus citation requirement; reject model responses lacking timestamp back-links.
 - **Prompt-injection defenses:** strip/escape markup, block directives asking to ignore policy, and cap prompt size; add a detector for “ignore instructions”/“speak as” phrases and fall back to rule-based summaries if triggered.
