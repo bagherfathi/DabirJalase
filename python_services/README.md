@@ -42,12 +42,14 @@ Replace these with durable storage/queue-backed flows when wiring the production
 
 - Requests include an `x-request-id` header (configurable via `PY_SERVICES_REQUEST_ID_HEADER`) so clients can correlate logs and responses.
 - Set `PY_SERVICES_API_KEY` to enforce a static API key; requests without the correct `x-api-key` will receive `401` responses so the scaffold can be exercised behind a gateway or tunnel.
+- Set `PY_SERVICES_ALLOWED_ORIGINS` (comma-separated) to emit CORS headers for browser clients; defaults to `*`.
+- Set `PY_SERVICES_MAX_REQUESTS_PER_MINUTE` to add simple in-memory rate limiting that returns `429` when exceeded.
 - Set `PY_SERVICES_STORAGE_DIR` to change where export manifests are written when using `/sessions/{id}/export/store`.
 - Configure `PY_SERVICES_EXPORT_RETENTION_DAYS` (default: `30`) to prune exports automatically after `/sessions/{id}/export/store` calls; set to `none` to disable automatic pruning and rely on `/exports/retention/sweep` instead.
 
 ## Local development
 1. Create a virtualenv and install dependencies from `requirements.txt` (model extras can remain commented out in constrained environments).
-2. Run the API with `python -m python_services` (or override defaults with `PY_SERVICES_HOST`, `PY_SERVICES_PORT`, `PY_SERVICES_RELOAD`, `PY_SERVICES_LOG_LEVEL`, `PY_SERVICES_STORAGE_DIR`, `PY_SERVICES_EXPORT_RETENTION_DAYS`).
+2. Run the API with `python -m python_services` (or override defaults with `PY_SERVICES_HOST`, `PY_SERVICES_PORT`, `PY_SERVICES_RELOAD`, `PY_SERVICES_LOG_LEVEL`, `PY_SERVICES_STORAGE_DIR`, `PY_SERVICES_EXPORT_RETENTION_DAYS`, `PY_SERVICES_ALLOWED_ORIGINS`, `PY_SERVICES_MAX_REQUESTS_PER_MINUTE`).
 3. Exercise the scaffold with `curl` or a REST client; responses are deterministic for easy testing.
 
 ### Containerized scaffold

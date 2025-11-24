@@ -6,10 +6,11 @@ diarization pipelines when models are available.
 """
 from __future__ import annotations
 
+import collections
 import logging
 import uuid
 from dataclasses import asdict
-from typing import List
+from typing import Callable, List
 
 from fastapi import FastAPI, HTTPException, Request, status
 from pydantic import BaseModel
@@ -30,6 +31,28 @@ logger = logging.getLogger("python_services.api")
 app = FastAPI(title="Meeting Assistant Services")
 
 
+class RateLimiter:
+    def __init__(self, max_requests_per_minute: int | None, now: Callable[[], float] | None = None):
+        self.max_requests_per_minute = max_requests_per_minute
+        self._now = now or uuid.uuid1().time  # stable monotonic-ish source without importing time
+        self._events: collections.deque[float] = collections.deque()
+
+    def allow(self) -> bool:
+        if self.max_requests_per_minute is None:
+            return True
+
+        current = self._now()
+        cutoff = current - (60 * 10**7)  # uuid time is in 100-ns increments
+        while self._events and self._events[0] < cutoff:
+            self._events.popleft()
+
+        if len(self._events) >= self.max_requests_per_minute:
+            return False
+
+        self._events.append(current)
+        return True
+
+
 @app.middleware("http")
 async def enforce_security(request: Request, call_next):
     request_id = request.headers.get(settings.request_id_header) or str(uuid.uuid4())
@@ -40,8 +63,24 @@ async def enforce_security(request: Request, call_next):
             logger.warning("rejecting request: missing or invalid API key", extra={"path": request.url.path})
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid api key")
 
+    if not rate_limiter.allow():
+        logger.warning("rejecting request: rate limit exceeded", extra={"path": request.url.path})
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="rate limit exceeded")
+
     response = await call_next(request)
     response.headers[settings.request_id_header] = request_id
+    return response
+
+
+@app.middleware("http")
+async def apply_cors(request: Request, call_next):
+    response = await call_next(request)
+    origin = request.headers.get("origin")
+    allow_any = "*" in settings.allowed_origins
+    if settings.allowed_origins and (allow_any or (origin and origin in settings.allowed_origins)):
+        response.headers["access-control-allow-origin"] = origin if origin and not allow_any else "*"
+        response.headers["access-control-allow-headers"] = "*"
+        response.headers["access-control-allow-methods"] = "GET,POST,DELETE,OPTIONS"
     return response
 
 stt = WhisperService()
@@ -50,6 +89,7 @@ tts = TextToSpeechService()
 summarizer = Summarizer()
 sessions = SessionStore()
 metrics = MetricsRegistry()
+rate_limiter = RateLimiter(settings.max_requests_per_minute)
 
 
 class TranscribeRequest(BaseModel):

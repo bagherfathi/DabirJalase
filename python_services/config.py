@@ -22,6 +22,8 @@ class ServiceSettings:
     request_id_header: str = "x-request-id"
     storage_dir: str = "data"
     export_retention_days: int | None = 30
+    allowed_origins: list[str] = None  # type: ignore[assignment]
+    max_requests_per_minute: int | None = None
 
     @classmethod
     def from_env(cls) -> "ServiceSettings":
@@ -43,6 +45,12 @@ class ServiceSettings:
                 return None
             return int(value)
 
+        def as_list(value: str | None, default: list[str]) -> list[str]:
+            if value is None:
+                return default
+            parsed = [item.strip() for item in value.split(",") if item.strip()]
+            return parsed or default
+
         return cls(
             host=os.getenv("PY_SERVICES_HOST", cls.host),
             port=int(os.getenv("PY_SERVICES_PORT", cls.port)),
@@ -53,6 +61,10 @@ class ServiceSettings:
             storage_dir=os.getenv("PY_SERVICES_STORAGE_DIR", cls.storage_dir),
             export_retention_days=as_int(
                 os.getenv("PY_SERVICES_EXPORT_RETENTION_DAYS"), cls.export_retention_days
+            ),
+            allowed_origins=as_list(os.getenv("PY_SERVICES_ALLOWED_ORIGINS"), ["*"]),
+            max_requests_per_minute=as_int(
+                os.getenv("PY_SERVICES_MAX_REQUESTS_PER_MINUTE"), cls.max_requests_per_minute
             ),
         )
 

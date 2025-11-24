@@ -11,6 +11,8 @@ def test_default_settings():
     assert settings.request_id_header == "x-request-id"
     assert settings.storage_dir == "data"
     assert settings.export_retention_days == 30
+    assert settings.allowed_origins == ["*"]
+    assert settings.max_requests_per_minute is None
 
 
 def test_env_overrides(monkeypatch):
@@ -22,6 +24,8 @@ def test_env_overrides(monkeypatch):
     monkeypatch.setenv("PY_SERVICES_REQUEST_ID_HEADER", "x-custom-id")
     monkeypatch.setenv("PY_SERVICES_STORAGE_DIR", "/tmp/exports")
     monkeypatch.setenv("PY_SERVICES_EXPORT_RETENTION_DAYS", "45")
+    monkeypatch.setenv("PY_SERVICES_ALLOWED_ORIGINS", "http://example.com, http://localhost")
+    monkeypatch.setenv("PY_SERVICES_MAX_REQUESTS_PER_MINUTE", "120")
 
     settings = ServiceSettings.from_env()
 
@@ -33,6 +37,8 @@ def test_env_overrides(monkeypatch):
     assert settings.request_id_header == "x-custom-id"
     assert settings.storage_dir == "/tmp/exports"
     assert settings.export_retention_days == 45
+    assert settings.allowed_origins == ["http://example.com", "http://localhost"]
+    assert settings.max_requests_per_minute == 120
 
 
 def test_retention_can_be_disabled(monkeypatch):

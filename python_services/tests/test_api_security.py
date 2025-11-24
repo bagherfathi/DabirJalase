@@ -14,6 +14,8 @@ def reload_server(monkeypatch):
 
     monkeypatch.delenv("PY_SERVICES_API_KEY", raising=False)
     monkeypatch.delenv("PY_SERVICES_REQUEST_ID_HEADER", raising=False)
+    monkeypatch.delenv("PY_SERVICES_ALLOWED_ORIGINS", raising=False)
+    monkeypatch.delenv("PY_SERVICES_MAX_REQUESTS_PER_MINUTE", raising=False)
     return _reload
 
 
@@ -38,3 +40,14 @@ def test_api_key_required_when_configured(monkeypatch, reload_server):
 
     authorized = client.get("/health", headers={"x-api-key": "secret"})
     assert authorized.status_code == 200
+
+
+def test_cors_headers_applied(monkeypatch, reload_server):
+    monkeypatch.setenv("PY_SERVICES_ALLOWED_ORIGINS", "http://example.com")
+    server = reload_server()
+    client = TestClient(server.app)
+
+    response = client.get("/health", headers={"origin": "http://example.com"})
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://example.com"
