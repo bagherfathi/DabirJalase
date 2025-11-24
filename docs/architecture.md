@@ -393,6 +393,20 @@
 - **Feedback-driven evals:** channel user-marked “wrong transcript” or “bad TTS pronunciation” clips into a curated evaluation queue with reviewer guidelines and auto-linked build/policy versions.
 - **Crash/health reports:** collect crash dumps and watchdog resets locally; if user opts in, upload minimal stacks plus device profile to prioritize fixes, respecting air-gapped/managed policies.
 
+## Pull Request Breakdown (Execution Plan)
+The following PRs decompose the architecture into reviewable, testable increments. Each PR should land behind feature flags where applicable and include the smoke-test fixture plus metrics/report artifacts for verification.
+
+1. **Scaffold & CI Bootstrap** — Initialize JavaFX shell, Python sidecar skeleton, protobuf contracts, gradle/uv tooling, lint/format hooks, and the install smoke test fixture.
+2. **Audio Capture & VAD** — Implement microphone pipeline with WebRTC denoise/AGC, VAD gating, bounded buffering, and gRPC streaming to the sidecar with structured logging.
+3. **STT Core with Backpressure** — Integrate Whisper/WhisperX (plus Vosk fallback), enforce latency/WER gates, and wire Java UI to display interim/final transcripts under backpressure controls.
+4. **Diarization & Speaker Enrollment** — Add pyannote/ECAPA diarization, embedding gallery persistence, spoof/liveness checks, “Who is this?” prompt flow, and quarantine for low-confidence segments.
+5. **TTS & Trust Cues** — Wire Azure/Google/Coqui TTS with caching, phoneme normalization for names, playback UX, and confidence/DER trust indicators in the UI.
+6. **Summaries & Traceability** — Add LLM summarization with citation back-links, faithfulness scoring, export to Markdown/HTML/PDF, and the “focus on dominant speaker” UX affordance.
+7. **Privacy, Policy, and Retention** — Encrypt artifacts, implement consent receipts and retention sweeper, expose policy bundles/config audits, and surface “forget speaker” + policy mismatch flows.
+8. **Resilience & Offline Mode** — Queue/retry streaming, fallback models, cache model assets with signature checks, air-gapped update path, and crash/recovery diagnostics CLI.
+9. **Observability & QA Readiness** — Ship metrics/alerts, profiling presets, RTL/accessibility screenshot tests, adversarial audio suite, and support bundle generation with PII scrubbing.
+10. **Release, Compliance, and Onboarding** — Deliver signed installers/update channel, SBOM/licensing notices, enterprise controls (SSO, managed policies), training sandbox, and in-app onboarding/help content.
+
 ## Alternatives
 - Cross-platform via **Electron + Node** with Python backend if web tech is preferred.
 - Mobile option: reuse Python service in the cloud; Android app in Kotlin streams audio via WebRTC to backend.
