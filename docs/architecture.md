@@ -318,6 +318,34 @@
 - **Playback interference:** detect loopback/feedback by checking near-zero-latency echo patterns; auto-lower TTS volume and prompt to mute speakers.
 - **Adversarial audio or spoofed enrollment:** enforce randomized enrollment phrases, run anti-spoof heuristics, and require user confirmation before updating trusted gallery entries.
 - **Resource exhaustion:** apply CPU/VRAM budgets per process; shed load by reducing VAD sensitivity and downgrading model sizes before dropping audio.
+
+## Prompt Hygiene, Red-Teaming, and Safety
+- **Grounded prompting:** all LLM summarization prompts must include a structured transcript slice plus citation requirement; reject model responses lacking timestamp back-links.
+- **Prompt-injection defenses:** strip/escape markup, block directives asking to ignore policy, and cap prompt size; add a detector for “ignore instructions”/“speak as” phrases and fall back to rule-based summaries if triggered.
+- **Toxicity/PII filters:** run lightweight classifiers on summaries and redact obvious PII (IDs, phone numbers) before display; keep the raw transcript available behind a “view raw” gated control.
+- **Red-team corpus:** maintain adversarial prompt/audio examples (in Farsi and mixed-language) that attempt jailbreaks, persona hijacks, or malicious SSML; fail CI if summaries deviate from policy-compliant outputs.
+- **Replay detection:** tag inputs with meeting/session IDs and drop repeated payloads to prevent replay of manipulated segments; audit rejected attempts.
+
+## Data Governance and Corpus Management
+- **Dataset lineage:** version training/eval corpora with checksums, consent status, and license; block ingestion of clips lacking provenance or consent receipts.
+- **Bias review:** track diarization/STT accuracy by gender/region/accent; add CI checks to ensure no cohort regresses >3 p.p. DER/WER across releases.
+- **Human labeling SOPs:** document labeling playbooks (timestamp granularity, overlap guidelines, anonymization rules) and require two-pass review for new benchmark additions.
+- **Corpus minimization:** rotate out stale meeting clips after N months; keep only fixtures necessary for regression and a minimal “stress” suite for fuzz tests.
+- **Access control:** store corpora and embeddings in encrypted volumes with role-based access; require dual control for exports of labeled datasets.
+
+## Edge Deployments and Enterprise Controls
+- **Air-gapped mode:** ship an offline updater bundle (SBOM + signed model/assets) for environments without internet; surface a “last-updated” watermark and warn when policy bundles are stale.
+- **Enterprise auth:** allow SSO (OIDC/SAML) for cloud mode; map identity to consent/audit records and restrict export/erasure actions by role.
+- **Device trust:** optionally enforce **device attestation** (Windows Hello/Platform attestation or macOS notarization checks) before enabling microphone capture in managed environments.
+- **Firewall-friendly transport:** provide HTTPS long-polling fallback when gRPC is blocked; throttle retry storms and expose a diagnostics probe for network allowlisting.
+- **Local policy overrides:** permit enterprises to enforce stricter retention/telemetry defaults; show an immutable “managed by org” banner when overrides are active.
+
+## Documentation, Training, and Change Management
+- **User guide:** ship an in-app handbook with RTL-aware screenshots for capture, consent, gallery enrollment, exports, and offline mode; include troubleshooting trees for common failures.
+- **Release notes:** publish per-version change logs summarizing model upgrades, policy changes, and known issues; persist locally so users can review offline.
+- **Admin playbook:** provide ops runbooks for backups, key rotation, SBOM signature validation, and responding to failed smoke tests; keep commands copy/pasteable.
+- **Training mode:** add a sandbox that replays bundled fixtures through the UI for training new users without recording live audio; disable export in this mode to prevent leakage.
+- **Change audits:** log schema/config/policy version bumps with responsible actor and rationale; require explicit acknowledgement in-app after major behavior changes (e.g., new retention defaults).
 - **Clock drift across devices:** align segments with monotonic timestamps and resample slowly to avoid transcript timing skew in long sessions.
 
 ## Alternatives
