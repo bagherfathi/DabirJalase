@@ -18,6 +18,8 @@ def test_save_and_load_export_round_trip(tmp_path):
         session_id="persist-me",
         created_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
         language="fa",
+        title="Persist title",
+        agenda=["one", "two"],
         segments=[SegmentRecord(speaker="spk1", text="salam", speaker_label="Host")],
         summary=Summary(highlight="hello", bullet_points=["point"]),
     )
@@ -30,6 +32,8 @@ def test_save_and_load_export_round_trip(tmp_path):
     assert loaded.session_id == export.session_id
     assert loaded.created_at == export.created_at
     assert loaded.language == export.language
+    assert loaded.title == "Persist title"
+    assert loaded.agenda == ["one", "two"]
     assert loaded.segments[0].speaker_label == "Host"
     assert loaded.summary.highlight == "hello"
 
@@ -50,6 +54,8 @@ def test_prune_exports_removes_old_files(tmp_path):
         session_id="recent",
         created_at=datetime(2024, 1, 10, tzinfo=timezone.utc),
         language="fa",
+        title="recent",
+        agenda=["agenda"],
         segments=[SegmentRecord(speaker="spk", text="hi", speaker_label=None)],
         summary=Summary(highlight="now", bullet_points=["bp"]),
     )
@@ -57,6 +63,8 @@ def test_prune_exports_removes_old_files(tmp_path):
         session_id="old",
         created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
         language="fa",
+        title="old",
+        agenda=[],
         segments=[SegmentRecord(speaker="spk2", text="bye", speaker_label=None)],
         summary=Summary(highlight="then", bullet_points=["bp"]),
     )
@@ -76,6 +84,8 @@ def test_delete_export_is_idempotent(tmp_path):
         session_id="remove-me",
         created_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
         language="fa",
+        title="delete",
+        agenda=["cleanup"],
         segments=[SegmentRecord(speaker="spk", text="bye", speaker_label=None)],
         summary=Summary(highlight="done", bullet_points=["bp"]),
     )

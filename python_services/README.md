@@ -22,11 +22,12 @@ To keep the scaffold product-shaped, a minimal in-memory session orchestrator st
 - `POST /sessions/{id}/process_buffer` — run VAD over the staged buffer, append diarized segments using a transcript hint, and optionally clear the buffer once stitched
 - `POST /sessions/{id}/speakers` — label an unlabeled speaker id with a friendly name (for "who is this?" prompts)
 - `POST /sessions/{id}/speakers/forget` — redact a speaker’s text and clear their display name (privacy/DSR helper)
+- `PATCH /sessions/{id}/metadata` — set or update meeting metadata (title + agenda) for export and UI surfacing
 - `GET /sessions/{id}` — fetch timeline segments with speaker labels where available
 - `GET /sessions/{id}/summary` — summarize accumulated segments for the session
-- `GET /sessions/{id}/export` — export the full meeting manifest with speaker labels and a deterministic summary for download or archival
-- `POST /sessions/{id}/export/store` — export and persist the manifest to `PY_SERVICES_STORAGE_DIR` (defaults to `./data/exports`)
-- `POST /exports/{id}/restore` — reload a stored manifest from disk back into the in-memory session store (preserves speaker labels)
+- `GET /sessions/{id}/export` — export the full meeting manifest with metadata, speaker labels, and a deterministic summary for download or archival
+- `POST /sessions/{id}/export/store` — export and persist the manifest (including metadata) to `PY_SERVICES_STORAGE_DIR` (defaults to `./data/exports`)
+- `POST /exports/{id}/restore` — reload a stored manifest from disk back into the in-memory session store (preserves speaker labels and metadata)
 - `DELETE /sessions/{id}` — remove the in-memory session and any persisted export manifest (idempotent)
 - `POST /exports/retention/sweep` — prune stored manifests older than the configured retention window (if enabled)
 

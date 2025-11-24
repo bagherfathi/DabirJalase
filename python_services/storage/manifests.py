@@ -42,3 +42,5 @@ class SessionExport:
     language: str
     segments: List[SegmentRecord]
     summary: Summary
+    title: str | None = None
+    agenda: List[str] = field(default_factory=list)

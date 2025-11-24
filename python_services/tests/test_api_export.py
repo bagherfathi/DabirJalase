@@ -12,8 +12,12 @@ def test_export_endpoint_returns_summary_and_labels():
 
     client = TestClient(server.app)
 
-    created = client.post("/sessions", json={"session_id": "api-export", "language": "fa"})
+    created = client.post(
+        "/sessions",
+        json={"session_id": "api-export", "language": "fa", "title": "Weekly sync", "agenda": ["Updates"]},
+    )
     assert created.status_code == 200
+    assert created.json()["metadata"]["title"] == "Weekly sync"
 
     appended = client.post("/sessions/append", json={"session_id": "api-export", "transcript": "salam"})
     assert appended.status_code == 200
@@ -32,6 +36,7 @@ def test_export_endpoint_returns_summary_and_labels():
     assert payload["summary"]["highlight"]
     assert payload["segments"][0]["speaker"] == speaker_id
     assert payload["segments"][0]["speaker_label"] == "Host"
+    assert payload["metadata"]["title"] == "Weekly sync"
 
 
 def test_export_store_and_fetch(tmp_path, monkeypatch):
@@ -43,7 +48,10 @@ def test_export_store_and_fetch(tmp_path, monkeypatch):
 
     client = TestClient(server.app)
 
-    created = client.post("/sessions", json={"session_id": "persist", "language": "fa"})
+    created = client.post(
+        "/sessions",
+        json={"session_id": "persist", "language": "fa", "title": "Persisted"},
+    )
     assert created.status_code == 200
 
     appended = client.post("/sessions/append", json={"session_id": "persist", "transcript": "salam"})
@@ -63,6 +71,7 @@ def test_export_store_and_fetch(tmp_path, monkeypatch):
     payload = fetched.json()
     assert payload["session_id"] == "persist"
     assert payload["summary"]["highlight"]
+    assert payload["metadata"]["title"] == "Persisted"
 
 
 def test_retention_sweep_removes_old_exports(tmp_path, monkeypatch):

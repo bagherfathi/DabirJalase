@@ -39,6 +39,8 @@ def save_export(export: SessionExport, base_dir: str) -> Path:
         "session_id": export.session_id,
         "created_at": export.created_at.isoformat(),
         "language": export.language,
+        "title": export.title,
+        "agenda": list(export.agenda),
         "segments": [
             {
                 "speaker": segment.speaker,
@@ -70,6 +72,8 @@ def load_export(session_id: str, base_dir: str) -> SessionExport:
         session_id=payload["session_id"],
         created_at=datetime.fromisoformat(payload["created_at"]),
         language=payload["language"],
+        title=payload.get("title"),
+        agenda=payload.get("agenda", []),
         segments=[
             SegmentRecord(
                 speaker=segment["speaker"],

@@ -22,9 +22,19 @@ class Session:
     session_id: str
     language: str = "fa"
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    title: str | None = None
+    agenda: List[str] = field(default_factory=list)
     segments: List[DiarizedSegment] = field(default_factory=list)
     speaker_labels: Dict[str, str] = field(default_factory=dict)
     audio_buffer: List[float] = field(default_factory=list)
+
+    def update_metadata(self, title: str | None = None, agenda: List[str] | None = None) -> None:
+        if title is not None:
+            self.title = title.strip() or None
+
+        if agenda is not None:
+            cleaned = [item.strip() for item in agenda if item.strip()]
+            self.agenda = cleaned
 
     def append_segments(self, new_segments: List[DiarizedSegment]) -> List[str]:
         new_speakers = [s.speaker for s in new_segments if s.speaker not in self.speaker_labels]
@@ -85,6 +95,8 @@ class Session:
             session_id=self.session_id,
             created_at=self.created_at,
             language=self.language,
+            title=self.title,
+            agenda=list(self.agenda),
             segments=[
                 SegmentRecord(
                     speaker=segment.speaker,
@@ -106,6 +118,13 @@ class Session:
             for segment in self.segments
         ]
 
+    def metadata_view(self) -> Dict[str, object]:
+        return {
+            "title": self.title,
+            "agenda": list(self.agenda),
+            "created_at": self.created_at.isoformat(),
+        }
+
 
 class SessionStore:
     def __init__(self):
@@ -125,6 +144,11 @@ class SessionStore:
         session = self._sessions[session_id]
         new_speakers = session.append_segments(segments)
         return session, new_speakers
+
+    def update_metadata(self, session_id: str, *, title: str | None = None, agenda: List[str] | None = None) -> Session:
+        session = self.get(session_id)
+        session.update_metadata(title=title, agenda=agenda)
+        return session
 
     def append_audio(self, session_id: str, samples: List[float], trim_to: int | None = None) -> Session:
         if session_id not in self._sessions:
@@ -204,6 +228,8 @@ class SessionStore:
             session_id=export.session_id,
             language=export.language,
             created_at=export.created_at,
+            title=export.title,
+            agenda=list(export.agenda),
             segments=[
                 DiarizedSegment(speaker=segment.speaker, text=segment.text)
                 for segment in export.segments

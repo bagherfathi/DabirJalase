@@ -5,9 +5,12 @@ from python_services.sessions import SessionStore
 def test_create_and_append_session():
     store = SessionStore()
     created = store.create("s1", language="fa")
+    created.update_metadata(title="Session title", agenda=["topic"])
     assert created.session_id == "s1"
     assert created.language == "fa"
     assert created.segments == []
+    assert created.title == "Session title"
+    assert created.agenda == ["topic"]
 
     segment = server.TranscriptManifest.from_diarized(
         transcript_id="s1", language="fa", segments=server.diarization.diarize(server.stt.transcribe("salam"))
@@ -52,6 +55,7 @@ def test_session_summary_endpoint(monkeypatch):
 def test_session_export_contains_labels_and_summary():
     store = SessionStore()
     session = store.create("export-demo")
+    session.update_metadata(title="Export", agenda=["demo"])
     diarized = server.diarization.diarize(server.stt.transcribe("salam"))
     store.append(session.session_id, diarized)
     speaker_id = diarized[0].speaker
@@ -61,6 +65,8 @@ def test_session_export_contains_labels_and_summary():
     assert exported.summary.highlight
     assert exported.segments[0].speaker_label == "Guest"
     assert exported.segments[0].speaker == speaker_id
+    assert exported.title == "Export"
+    assert exported.agenda == ["demo"]
 
 
 def test_forget_speaker_redacts_segments():
@@ -81,6 +87,7 @@ def test_forget_speaker_redacts_segments():
 def test_restore_from_export_rehydrates_labels_and_segments():
     store = SessionStore()
     session = store.create("rehydrate", language="fa")
+    session.update_metadata(title="Restore", agenda=["agenda"])
     diarized = server.diarization.diarize(server.stt.transcribe("salam"))
     store.append(session.session_id, diarized)
     speaker_id = diarized[0].speaker
@@ -95,3 +102,5 @@ def test_restore_from_export_rehydrates_labels_and_segments():
     assert restored.language == exported.language
     assert restored.created_at == exported.created_at
     assert restored.serialized_segments()[0]["speaker_label"] == "Ali"
+    assert restored.title == "Restore"
+    assert restored.agenda == ["agenda"]

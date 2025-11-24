@@ -58,6 +58,13 @@ class FastAPI:
 
         return decorator
 
+    def patch(self, path: str):
+        def decorator(func: Callable):
+            self.routes.append({"method": "PATCH", "path": path, "handler": func})
+            return func
+
+        return decorator
+
     def delete(self, path: str):
         def decorator(func: Callable):
             self.routes.append({"method": "DELETE", "path": path, "handler": func})
@@ -180,6 +187,9 @@ class TestClient:
 
     def post(self, path: str, headers: Optional[Dict[str, str]] = None, json: Any = None) -> Response:
         return self.request("POST", path, headers=headers, json=json)
+
+    def patch(self, path: str, headers: Optional[Dict[str, str]] = None, json: Any = None) -> Response:
+        return self.request("PATCH", path, headers=headers, json=json)
 
     def delete(self, path: str, headers: Optional[Dict[str, str]] = None) -> Response:
         return self.request("DELETE", path, headers=headers)

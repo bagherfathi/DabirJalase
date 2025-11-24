@@ -110,6 +110,8 @@ class SpeakerRequest(BaseModel):
 class SessionCreateRequest(BaseModel):
     session_id: str
     language: str = "fa"
+    title: str | None = None
+    agenda: List[str] | None = None
 
 
 class SessionAppendRequest(BaseModel):
@@ -120,6 +122,11 @@ class SessionAppendRequest(BaseModel):
 class SpeakerLabelRequest(BaseModel):
     speaker_id: str
     display_name: str
+
+
+class SessionMetadataRequest(BaseModel):
+    title: str | None = None
+    agenda: List[str] | None = None
 
 
 class TtsRequest(BaseModel):
@@ -314,8 +321,14 @@ def diarize(request: SpeakerRequest):
 @app.post("/sessions")
 def create_session(request: SessionCreateRequest):
     session = sessions.create(request.session_id, language=request.language)
+    session.update_metadata(title=request.title, agenda=request.agenda)
     metrics.counter("sessions.create").inc()
-    return {"session_id": session.session_id, "language": session.language, "segments": []}
+    return {
+        "session_id": session.session_id,
+        "language": session.language,
+        "segments": [],
+        "metadata": session.metadata_view(),
+    }
 
 
 @app.post("/sessions/append")
@@ -340,11 +353,17 @@ def append_to_session(request: SessionAppendRequest):
 @app.get("/sessions/{session_id}/summary")
 def summarize_session(session_id: str):
     try:
+        session = sessions.get(session_id)
         summary = sessions.summary(session_id, summarizer)
     except KeyError as exc:  # pragma: no cover - exercised via API tests
         _translate_session_error(exc)
     metrics.counter("sessions.summary").inc()
-    return {"highlight": summary.highlight, "bullet_points": summary.bullet_points}
+    return {
+        "session_id": session.session_id,
+        "metadata": session.metadata_view(),
+        "highlight": summary.highlight,
+        "bullet_points": summary.bullet_points,
+    }
 
 
 @app.get("/sessions/{session_id}/export")
@@ -358,6 +377,7 @@ def export_session(session_id: str):
         "session_id": exported.session_id,
         "created_at": exported.created_at.isoformat(),
         "language": exported.language,
+        "metadata": {"title": exported.title, "agenda": exported.agenda, "created_at": exported.created_at.isoformat()},
         "segments": [asdict(segment) for segment in exported.segments],
         "summary": {"highlight": exported.summary.highlight, "bullet_points": exported.summary.bullet_points},
     }
@@ -374,7 +394,12 @@ def export_and_store(session_id: str):
     if settings.export_retention_days is not None:
         removed = persistence.prune_exports(settings.storage_dir, settings.export_retention_days)
     metrics.counter("sessions.export.store").inc()
-    return {"session_id": exported.session_id, "saved_path": str(saved_path), "pruned": removed}
+    return {
+        "session_id": exported.session_id,
+        "metadata": {"title": exported.title, "agenda": exported.agenda, "created_at": exported.created_at.isoformat()},
+        "saved_path": str(saved_path),
+        "pruned": removed,
+    }
 
 
 @app.get("/exports")
@@ -396,6 +421,7 @@ def fetch_stored_export(session_id: str):
         "session_id": exported.session_id,
         "created_at": exported.created_at.isoformat(),
         "language": exported.language,
+        "metadata": {"title": exported.title, "agenda": exported.agenda, "created_at": exported.created_at.isoformat()},
         "segments": [asdict(segment) for segment in exported.segments],
         "summary": {"highlight": exported.summary.highlight, "bullet_points": exported.summary.bullet_points},
     }
@@ -415,6 +441,7 @@ def restore_export(session_id: str):
         "session_id": restored_session.session_id,
         "created_at": restored_session.created_at.isoformat(),
         "language": restored_session.language,
+        "metadata": restored_session.metadata_view(),
         "segments": restored_session.serialized_segments(),
         "summary": {
             "highlight": exported.summary.highlight,
@@ -458,7 +485,26 @@ def get_session(session_id: str):
     except KeyError as exc:  # pragma: no cover - exercised via API tests
         _translate_session_error(exc)
     metrics.counter("sessions.get").inc()
-    return {"session_id": session.session_id, "segments": session.serialized_segments(), "language": session.language}
+    return {
+        "session_id": session.session_id,
+        "segments": session.serialized_segments(),
+        "language": session.language,
+        "metadata": session.metadata_view(),
+    }
+
+
+@app.patch("/sessions/{session_id}/metadata")
+def update_session_metadata(session_id: str, request: SessionMetadataRequest):
+    try:
+        session = sessions.update_metadata(session_id, title=request.title, agenda=request.agenda)
+    except KeyError as exc:  # pragma: no cover - exercised via API tests
+        _translate_session_error(exc)
+    metrics.counter("sessions.metadata").inc()
+    return {
+        "session_id": session.session_id,
+        "metadata": session.metadata_view(),
+        "segments": session.serialized_segments(),
+    }
 
 
 @app.post("/sessions/{session_id}/speakers")
