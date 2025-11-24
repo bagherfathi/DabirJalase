@@ -407,6 +407,55 @@ The following PRs decompose the architecture into reviewable, testable increment
 9. **Observability & QA Readiness** — Ship metrics/alerts, profiling presets, RTL/accessibility screenshot tests, adversarial audio suite, and support bundle generation with PII scrubbing.
 10. **Release, Compliance, and Onboarding** — Deliver signed installers/update channel, SBOM/licensing notices, enterprise controls (SSO, managed policies), training sandbox, and in-app onboarding/help content.
 
+### PR Acceptance Criteria and Artifacts
+For each PR above, enforce the following reviewable outputs to keep quality measurable and prevent scope drift.
+
+- **Common bar for all PRs**
+  - Feature flags default **off** unless explicitly promoted.
+  - Updated **metrics snapshot** (latency, WER/DER where relevant) and **smoke-test report** attached to the PR description.
+  - **Rollback notes**: clear reversion steps if the feature regresses SLOs post-merge.
+  - **Docs/tests**: refreshed README snippet for new user-facing behavior and at least one automated test tied to the change.
+
+- **PR1 (Scaffold & CI Bootstrap)**
+  - Gradle/uv pipelines lint/format/check succeed; protobuf contracts compile in both Java and Python.
+  - Smoke test fixture runs locally and in CI, producing a minimal HTML report artifact.
+
+- **PR2 (Audio Capture & VAD)**
+  - Demonstrate VAD precision/recall on bundled clips with thresholds documented in the PR.
+  - Structured logs confirm bounded buffer behavior under simulated backpressure.
+
+- **PR3 (STT Core with Backpressure)**
+  - Publish WER/latency against the Farsi eval slice with pass/fail gates noted.
+  - UI shows interim and final transcripts with a backpressure watermark when limits engage.
+
+- **PR4 (Diarization & Speaker Enrollment)**
+  - DER reported for overlap/non-overlap fixtures; quarantine path exercised in tests.
+  - Enrollment prompt flow captured in screenshots (including RTL) and anti-spoof flag logging verified.
+
+- **PR5 (TTS & Trust Cues)**
+  - TTS latency and pronunciation checklist results attached; cached/uncached timings distinguished.
+  - UI trust cues (confidence/DER overlays) covered by screenshot tests.
+
+- **PR6 (Summaries & Traceability)**
+  - Faithfulness score computation demonstrated on a sample meeting; bullets link back to timestamps in the artifact.
+  - Focus-on-dominant-speaker UI interaction validated in a short capture clip.
+
+- **PR7 (Privacy, Policy, and Retention)**
+  - Evidence of encryption at rest (keystore-backed key usage) and retention sweeper dry-run logs.
+  - “Forget speaker” flow test showing embeddings/transcripts/audit entries purged with policy version recorded.
+
+- **PR8 (Resilience & Offline Mode)**
+  - Offline queue replay test with checksum verification; model signature failure path demonstrated.
+  - Crash diagnostics CLI output attached and verified redaction of transcripts by default.
+
+- **PR9 (Observability & QA Readiness)**
+  - Metrics/alert wiring shown via sample Prometheus scrape; profiling preset generates a flamegraph artifact.
+  - RTL/accessibility screenshot diffs and adversarial audio suite pass/fail results summarized.
+
+- **PR10 (Release, Compliance, and Onboarding)**
+  - Signed installer/update channel validation logs (signature + checksum) attached.
+  - SSO/managed-policy flows demoed with screenshots; onboarding/help content linked from the UI.
+
 ## Alternatives
 - Cross-platform via **Electron + Node** with Python backend if web tech is preferred.
 - Mobile option: reuse Python service in the cloud; Android app in Kotlin streams audio via WebRTC to backend.
