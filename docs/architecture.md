@@ -456,6 +456,43 @@ For each PR above, enforce the following reviewable outputs to keep quality meas
   - Signed installer/update channel validation logs (signature + checksum) attached.
   - SSO/managed-policy flows demoed with screenshots; onboarding/help content linked from the UI.
 
+## Production Readiness Checklist
+- **Build integrity**
+  - Release artifacts signed; signatures, checksums, and SBOM published alongside binaries and installers.
+  - Reproducible-build recipe produces identical hashes across two clean environments; attestation captured in CI logs.
+  - Third-party licenses/attribution bundled with provenance for media, fonts, and datasets.
+- **Security & privacy**
+  - Network calls restricted to allowlist endpoints; certificate pinning enabled for backend calls.
+  - Secrets injected via environment/keystore only; no secrets or access tokens committed to disk or logs.
+  - Consent prompts, retention defaults, and “forget speaker” flow verified with screenshots and audit-log excerpts.
+- **Data durability & recovery**
+  - Backup/restore dry runs succeed for the profile store, embeddings, and transcripts with manifest checksums verified.
+  - Offline queue replay validated on at least one simulated power loss and one network flap scenario.
+  - Migration/rollback playbook exercised: upgrade with data backfill, then rollback with forward-compatibility checks.
+- **Quality gates & benchmarks**
+  - STT/TTS benchmarks (WER, latency, pronunciation) within documented thresholds on reference hardware.
+  - Diarization DER and spoof-check false-accept rates published for noisy and clean fixtures.
+  - Summarization faithfulness scores and grounding links validated on the bundled sample meeting.
+- **Reliability & performance**
+  - Profiling preset generates flamegraphs; hotspots reviewed with target caps for CPU, GPU, and memory.
+  - Thermal/throughput guardrails enforced on laptops (cap frame rate/encoding bitrate when throttling is detected).
+  - Chaos drills (API degradation, model download failure, clock drift) executed with evidence of graceful recovery.
+- **UX & accessibility**
+  - RTL layouts, screen-reader labels, and color-contrast audits passing; focus order validated in chat/controls.
+  - Trust cues (confidence, DER overlays, policy version) displayed in UI snapshots for both desktop and Android shells.
+  - Onboarding/help content reachable in ≤2 clicks; support-bundle export flow documented and tested.
+- **Operations & observability**
+  - Metrics and health endpoints scrapeable; alert thresholds defined for STT latency, DER regression, queue depth, and VAD false triggers.
+  - Structured logs cover critical paths (capture, streaming, inference, summarization, retention sweeps) with redaction rules proven in tests.
+  - Support runbook linked to log keys, metrics, and feature flags used for triage/rollback.
+
+## Definition of Done for the program
+- All PR-specific acceptance criteria satisfied with linked artifacts (metrics snapshots, screenshots, logs, or recordings).
+- Production readiness checklist items have passing evidence for the current target platforms (Windows/macOS/Linux, optional Android thin client).
+- Release candidate built from a reproducible pipeline with signed outputs and published SBOM/attestations.
+- Rollback path verified (previous stable build install + data compatibility) and documented in the release notes.
+- Support channels prepared (in-app feedback, crash diagnostics, runbook links) and ownership on-call rotation confirmed.
+
 ## Alternatives
 - Cross-platform via **Electron + Node** with Python backend if web tech is preferred.
 - Mobile option: reuse Python service in the cloud; Android app in Kotlin streams audio via WebRTC to backend.
