@@ -25,6 +25,10 @@ To keep the scaffold product-shaped, a minimal in-memory session orchestrator st
 
 Replace these with durable storage/queue-backed flows when wiring the production pipeline.
 
+### Demo harness
+
+- Run a deterministic end-to-end flow (create session → diarize → label speakers → summarize → export) without hitting the API via `python -m python_services.scripts.demo_session`. Add `--persist ./data/exports` to write the manifest to disk for inspection.
+
 ### Access control and traceability
 
 - Requests include an `x-request-id` header (configurable via `PY_SERVICES_REQUEST_ID_HEADER`) so clients can correlate logs and responses.
@@ -36,6 +40,10 @@ Replace these with durable storage/queue-backed flows when wiring the production
 1. Create a virtualenv and install dependencies from `requirements.txt` (model extras can remain commented out in constrained environments).
 2. Run the API with `python -m python_services` (or override defaults with `PY_SERVICES_HOST`, `PY_SERVICES_PORT`, `PY_SERVICES_RELOAD`, `PY_SERVICES_LOG_LEVEL`, `PY_SERVICES_STORAGE_DIR`, `PY_SERVICES_EXPORT_RETENTION_DAYS`).
 3. Exercise the scaffold with `curl` or a REST client; responses are deterministic for easy testing.
+
+### Containerized scaffold
+- Build the lean image (uvicorn only; uses local FastAPI/Pydantic shims) with `docker build -f python_services/Dockerfile -t meeting-assistant-services .`.
+- Run the container with `docker run -p 8000:8000 -e PY_SERVICES_EXPORT_RETENTION_DAYS=30 meeting-assistant-services` to expose the API locally.
 
 ## Next steps
 - Replace stub services with real Whisper/pyannote/Coqui adapters and cache layers.
