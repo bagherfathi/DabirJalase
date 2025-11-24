@@ -193,6 +193,35 @@
 - **Color and motion:** respect OS high-contrast/reduced-motion preferences; provide a monochrome theme option for projector readability during meetings.
 - **Idle/privacy states:** add a “privacy curtain” that hides transcripts when the window loses focus or on user request; show obfuscated previews until reactivated.
 
+## Supply Chain, Licensing, and Attribution
+- **Dependency policy:** pin Python and Java dependencies with lockfiles (e.g., `requirements.txt` + hashes, Gradle version catalogs) and enforce license allowlists (Apache/MIT/BSD) via automated scans in CI.
+- **Third-party models:** store license/usage terms for Whisper, pyannote, Vosk, Coqui, and Azure/Google TTS; surface a **licenses** view in the app and export bundle to fulfill attribution.
+- **Binary provenance:** sign installers and sidecar wheels; publish SBOMs (CycloneDX) for each release and verify signatures during updates. Refuse unsigned updater payloads.
+- **Model authenticity:** require signature+checksum verification before activating new model assets; quarantine and alert on mismatches, keeping previous assets active.
+- **Reproducible builds:** document deterministic build flags (e.g., `SOURCE_DATE_EPOCH`, stripped timestamps in archives) so support can reproduce shipped binaries.
+
+## Performance Engineering Playbook
+- **Profiling presets:** preconfigure async-profiler/JFR for Java UI and PyTorch profiler for the Python sidecar; ship scripts to capture 30–60 second traces with privacy scrubbing of transcript text.
+- **Hot-path audits:** profile VAD→gRPC→STT→UI loop under CPU-only and GPU modes; budget time per stage and fail builds that exceed the budget by >10%.
+- **Frame pacing:** align capture buffer sizes with model stride (e.g., 20–30 ms frames) to avoid jitter; log buffer overruns and adaptively reduce frame size when underruns occur.
+- **GPU safeguards:** monitor VRAM usage and auto-downgrade model sizes when fragmentation or memory pressure is detected; expose a UI banner when falling back.
+- **Thermal management (Android):** reduce diarization frequency or switch to offline lightweight STT when thermal throttling is detected; delay non-critical uploads until cool-down completes.
+
+## Supportability and Field Operations
+- **Tiered diagnostics:** expose three levels—basic (health + versions), sensitive (recent logs, redacted transcripts), and deep (short audio slices + embeddings hashed); default to basic and require explicit consent for deeper levels.
+- **Guided troubleshooting:** add a “Fix it” wizard that walks users through microphone checks, network reachability to the Python service, and model asset validation before opening a ticket.
+- **Runbook links in-app:** surface contextual help URLs for common errors (model load failure, policy mismatch, consent required) with remediation steps from the ops runbook.
+- **Incident markers:** allow support to mark a session as “investigation pending,” preserving logs/metrics beyond normal retention while respecting consent for audio storage.
+- **Telemetry minimization:** for opted-in analytics, strip transcript text and send only aggregated counters/hashes; expose a toggle in setup and settings.
+
+## Delivery Roadmap (Expanded)
+- **M0 (2–3 weeks):** local-only desktop prototype with VAD, Whisper small, basic diarization, chat UI, and manual speaker naming; ship installer smoke test and privacy curtain.
+- **M1 (4–6 weeks):** integrate gallery persistence, Azure/Google TTS, summary export, and audit/consent logging; add deterministic model download and policy bundles.
+- **M2 (6–10 weeks):** backpressure/tuning for GPU + CPU, overlap-aware diarization, trust cues, RTL/accessibility tests, and support bundle CLI; start canary promotion rules.
+- **M3 (10–14 weeks):** rollout governance (data residency, erasure), hardware-matrix CI, adversarial audio suite, auto-noise profiling, and configuration audits.
+- **M4 (14–18 weeks):** refine performance (profiling presets, GPU fallbacks), deliver Android thin client with offline pack, enable signed updates, and complete compliance/attribution UI.
+- **M5 (18–22 weeks):** production hardening: SBO M + signature enforcement, field telemetry with opt-in, incident markers, and fully automated rollback + policy reconciliation flows.
+
 ## Deployment, Packaging, and Environment Strategy
 - **Target bundles:** ship desktop binaries per OS (Windows .msi, macOS .pkg/.dmg notarized, Linux .deb/.rpm/AppImage) with an embedded JRE and optional embedded Python env. Offer a “lean” installer that downloads models on first run to cut initial size.
 - **Runtime separation:** isolate Python sidecar into its own process with signed wheels and pinned hashes; prefer **venv + uv** for deterministic dependency sync. On macOS, harden runtime with entitlements for microphone/file access only.
