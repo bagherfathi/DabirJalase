@@ -348,6 +348,30 @@
 - **Change audits:** log schema/config/policy version bumps with responsible actor and rationale; require explicit acknowledgement in-app after major behavior changes (e.g., new retention defaults).
 - **Clock drift across devices:** align segments with monotonic timestamps and resample slowly to avoid transcript timing skew in long sessions.
 
+## Licensing, Provenance, and IP Compliance
+- **SBOM and license auditing:** ship an SBOM with SPDX identifiers for all dependencies/models; block builds if license scanners (e.g., OSS Review Toolkit) find non-compliant copyleft in app clients or embedded assets.
+- **Content provenance:** propagate source metadata (speaker, device, session, consent ID) into transcript and embedding records; include signatures/hashes for model and policy bundles so downstream exports retain cryptographic proof of origin.
+- **Attribution and notices:** auto-generate NOTICE/third-party acknowledgements in-app and in installers (Windows/macOS/Android) from the SBOM; keep localized Farsi/English versions.
+- **Media rights checks:** before exporting audio clips or synthesized voices, require an explicit confirmation that the requester has rights/consent; log the attestation alongside the export manifest for audits.
+
+## Chaos Engineering and Incident Readiness
+- **Fault injection:** rehearse gRPC dropouts, stalled TTS responses, and corrupted policy bundles in staging; verify clients fail closed (e.g., stop capture, show privacy curtain) rather than leaking audio.
+- **Game days:** schedule quarterly drills that simulate cloud outages, revoked certificates, or adversarial firmware updates; measure MTTD/MTTR against SLOs and update runbooks with findings.
+- **Load shedding verification:** automate tests that ratchet CPU/GPU pressure and ensure the app gracefully downgrades models/VAD sensitivity before dropping audio, with clear UI banners.
+- **Post-incident reports:** standardize RCA templates (timeline, user impact, detection gaps, owner, follow-ups) and require publication within 72 hours for Sev-1 incidents.
+
+## Performance Tuning and Hardware Sizing
+- **Latency budgets:** set end-to-end targets (e.g., <800 ms STT partials, <400 ms TTS kickoff) and track them per platform/hardware tier; block releases if P95 exceeds budgets in CI or field telemetry.
+- **Thermal/IO constraints:** on mobile, monitor thermals and adapt sample rates/model sizes; on desktops, pin capture/decoding threads to dedicated cores to minimize jitter.
+- **Model profiling:** maintain profiler presets (CPU/GPU traces, memory snapshots) and attach perf baselines to each model version; reject promotions that regress real-time factors.
+- **Hardware guidance:** publish a sizing matrix (RAM/CPU/GPU/network) for expected meeting sizes and noise environments; detect underpowered devices and auto-enable lightweight pipelines.
+
+## Customer Support and Feedback Loops
+- **In-app feedback:** provide a “report issue” flow that captures anonymized logs/metrics (with opt-in) plus a short audio excerpt when users flag transcription/voice errors; pre-redact PII before upload.
+- **Support SLAs:** define response/resolution targets by severity; integrate on-call rotation details and escalation paths into the runbook.
+- **Feedback-driven evals:** channel user-marked “wrong transcript” or “bad TTS pronunciation” clips into a curated evaluation queue with reviewer guidelines and auto-linked build/policy versions.
+- **Crash/health reports:** collect crash dumps and watchdog resets locally; if user opts in, upload minimal stacks plus device profile to prioritize fixes, respecting air-gapped/managed policies.
+
 ## Alternatives
 - Cross-platform via **Electron + Node** with Python backend if web tech is preferred.
 - Mobile option: reuse Python service in the cloud; Android app in Kotlin streams audio via WebRTC to backend.
