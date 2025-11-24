@@ -3,9 +3,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 
 from python_services.diarization.diarization_service import DiarizedSegment
+from python_services.summarization.summarizer import Summary
+
+
+@dataclass
+class SegmentRecord:
+    speaker: str
+    text: str
+    speaker_label: Optional[str] = None
 
 
 @dataclass
@@ -23,3 +31,14 @@ class TranscriptManifest:
             language=language,
             segments=segments,
         )
+
+
+@dataclass
+class SessionExport:
+    """Serializable view of a full meeting session."""
+
+    session_id: str
+    created_at: datetime
+    language: str
+    segments: List[SegmentRecord]
+    summary: Summary

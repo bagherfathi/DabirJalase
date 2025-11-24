@@ -8,9 +8,11 @@ later.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Dict, List, Tuple
 
 from python_services.diarization.diarization_service import DiarizedSegment
+from python_services.storage.manifests import SegmentRecord, SessionExport
 from python_services.summarization.summarizer import Summary
 
 
@@ -18,6 +20,7 @@ from python_services.summarization.summarizer import Summary
 class Session:
     session_id: str
     language: str = "fa"
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     segments: List[DiarizedSegment] = field(default_factory=list)
     speaker_labels: Dict[str, str] = field(default_factory=dict)
 
@@ -32,6 +35,23 @@ class Session:
     def summary(self, summarizer) -> Summary:
         transcript_text = " ".join(segment.text for segment in self.segments)
         return summarizer.summarize(transcript_text)
+
+    def export(self, summarizer) -> SessionExport:
+        summary = self.summary(summarizer)
+        return SessionExport(
+            session_id=self.session_id,
+            created_at=self.created_at,
+            language=self.language,
+            segments=[
+                SegmentRecord(
+                    speaker=segment.speaker,
+                    speaker_label=self.speaker_labels.get(segment.speaker),
+                    text=segment.text,
+                )
+                for segment in self.segments
+            ],
+            summary=summary,
+        )
 
     def serialized_segments(self) -> List[Dict[str, str]]:
         return [
@@ -75,6 +95,9 @@ class SessionStore:
 
     def summary(self, session_id: str, summarizer) -> Summary:
         return self.get(session_id).summary(summarizer)
+
+    def export(self, session_id: str, summarizer) -> SessionExport:
+        return self.get(session_id).export(summarizer)
 
     def clear(self) -> None:
         self._sessions.clear()

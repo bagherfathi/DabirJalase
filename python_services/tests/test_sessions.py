@@ -47,3 +47,17 @@ def test_session_summary_endpoint(monkeypatch):
     summary = store.summary("s-demo", server.summarizer)
     assert summary.highlight
     assert summary.bullet_points
+
+
+def test_session_export_contains_labels_and_summary():
+    store = SessionStore()
+    session = store.create("export-demo")
+    diarized = server.diarization.diarize(server.stt.transcribe("salam"))
+    store.append(session.session_id, diarized)
+    speaker_id = diarized[0].speaker
+    store.label(session.session_id, speaker_id, "Guest")
+
+    exported = store.export(session.session_id, server.summarizer)
+    assert exported.summary.highlight
+    assert exported.segments[0].speaker_label == "Guest"
+    assert exported.segments[0].speaker == speaker_id

@@ -18,6 +18,7 @@ To keep the scaffold product-shaped, a minimal in-memory session orchestrator st
 - `POST /sessions/{id}/speakers` — label an unlabeled speaker id with a friendly name (for "who is this?" prompts)
 - `GET /sessions/{id}` — fetch timeline segments with speaker labels where available
 - `GET /sessions/{id}/summary` — summarize accumulated segments for the session
+- `GET /sessions/{id}/export` — export the full meeting manifest with speaker labels and a deterministic summary for download or archival
 
 Replace these with durable storage/queue-backed flows when wiring the production pipeline.
 

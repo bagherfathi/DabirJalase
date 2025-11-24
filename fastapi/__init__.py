@@ -7,8 +7,11 @@ Only the small surface area used by the scaffold is implemented.
 from __future__ import annotations
 
 import asyncio
+import inspect
 from types import SimpleNamespace
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, get_type_hints
+
+from pydantic import BaseModel
 
 
 class HTTPException(Exception):
@@ -61,19 +64,62 @@ class FastAPI:
 
         return decorator
 
-    def _find_route(self, method: str, path: str) -> Dict[str, Any]:
+    def _match_path(self, route_path: str, request_path: str) -> Optional[Dict[str, str]]:
+        route_parts = route_path.strip("/").split("/")
+        request_parts = request_path.strip("/").split("/")
+
+        if len(route_parts) != len(request_parts):
+            return None
+
+        params: Dict[str, str] = {}
+        for route_part, request_part in zip(route_parts, request_parts):
+            if route_part.startswith("{") and route_part.endswith("}"):
+                params[route_part.strip("{}") or "param"] = request_part
+            elif route_part != request_part:
+                return None
+        return params
+
+    def _find_route(self, method: str, path: str) -> tuple[Dict[str, Any], Dict[str, str]]:
         for route in self.routes:
-            if route["method"] == method and route["path"] == path:
-                return route
+            if route["method"] != method:
+                continue
+            params = self._match_path(route["path"], path)
+            if params is not None:
+                return route, params
         raise ValueError(f"Route not found: {method} {path}")
 
     async def _dispatch(self, method: str, path: str, headers: Dict[str, str], body: Any = None) -> Response:
-        route = self._find_route(method, path)
+        route, path_params = self._find_route(method, path)
         request = Request(headers=headers, url=path)
+        request.path_params = path_params
 
         async def endpoint(_: Request) -> Response:
             handler = route["handler"]
-            result = handler(body) if body is not None else handler()
+            parsed = body
+            signature = inspect.signature(handler)
+            params = list(signature.parameters.values())
+            if body is not None and params:
+                type_hints = get_type_hints(handler)
+                model_annotation = next(
+                    (
+                        type_hints.get(param.name, param.annotation)
+                        for param in params
+                        if isinstance(type_hints.get(param.name, param.annotation), type)
+                        and issubclass(type_hints.get(param.name, param.annotation), BaseModel)
+                    ),
+                    None,
+                )
+                if isinstance(model_annotation, type) and issubclass(model_annotation, BaseModel):
+                    parsed = model_annotation(**body)
+
+            args = []
+            for param in params:
+                if param.name in path_params:
+                    args.append(path_params[param.name])
+                elif parsed is not None:
+                    args.append(parsed)
+                    parsed = None  # only consume once
+            result = handler(*args) if args else handler()
             return result if isinstance(result, Response) else Response(result)
 
         call_next = endpoint
