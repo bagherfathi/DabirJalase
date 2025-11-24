@@ -12,8 +12,26 @@ def test_create_and_append_session():
     segment = server.TranscriptManifest.from_diarized(
         transcript_id="s1", language="fa", segments=server.diarization.diarize(server.stt.transcribe("salam"))
     )
-    updated = store.append("s1", segment.segments)
+    updated, new_speakers = store.append("s1", segment.segments)
     assert len(updated.segments) == len(segment.segments)
+    assert new_speakers
+
+
+def test_labeling_resolves_speakers():
+    store = SessionStore()
+    session = store.create("session-labels")
+    manifest = server.TranscriptManifest.from_diarized(
+        transcript_id=session.session_id,
+        language="fa",
+        segments=server.diarization.diarize(server.stt.transcribe("salam")),
+    )
+    session, new_speakers = store.append(session.session_id, manifest.segments)
+    assert new_speakers
+
+    speaker_id = new_speakers[0]
+    store.label(session.session_id, speaker_id, "Test Speaker")
+    serialized = session.serialized_segments()
+    assert serialized[0]["speaker_label"] == "Test Speaker"
 
 
 def test_session_summary_endpoint(monkeypatch):

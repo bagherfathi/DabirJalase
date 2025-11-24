@@ -14,7 +14,9 @@ Lightweight FastAPI-based services for transcription, diarization, TTS, and summ
 To keep the scaffold product-shaped, a minimal in-memory session orchestrator stitches the stubs together:
 
 - `POST /sessions` — create a session id and language
-- `POST /sessions/append` — run placeholder STT + diarization and append segments to the session
+- `POST /sessions/append` — run placeholder STT + diarization and append segments to the session, returning any newly seen speakers
+- `POST /sessions/{id}/speakers` — label an unlabeled speaker id with a friendly name (for "who is this?" prompts)
+- `GET /sessions/{id}` — fetch timeline segments with speaker labels where available
 - `GET /sessions/{id}/summary` — summarize accumulated segments for the session
 
 Replace these with durable storage/queue-backed flows when wiring the production pipeline.

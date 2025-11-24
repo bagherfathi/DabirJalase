@@ -54,6 +54,11 @@ class SessionAppendRequest(BaseModel):
     transcript: str
 
 
+class SpeakerLabelRequest(BaseModel):
+    speaker_id: str
+    display_name: str
+
+
 class TtsRequest(BaseModel):
     text: str
     voice: str = "fa-IR-Standard-A"
@@ -96,9 +101,13 @@ def append_to_session(request: SessionAppendRequest):
     manifest = TranscriptManifest.from_diarized(
         transcript_id=request.session_id, language=transcript.language, segments=diarized
     )
-    session = sessions.append(request.session_id, manifest.segments)
+    session, new_speakers = sessions.append(request.session_id, manifest.segments)
     metrics.counter("sessions.append").inc()
-    return {"session_id": session.session_id, "segments": [asdict(s) for s in session.segments]}
+    return {
+        "session_id": session.session_id,
+        "segments": session.serialized_segments(),
+        "new_speakers": new_speakers,
+    }
 
 
 @app.get("/sessions/{session_id}/summary")
@@ -106,6 +115,25 @@ def summarize_session(session_id: str):
     summary = sessions.summary(session_id, summarizer)
     metrics.counter("sessions.summary").inc()
     return {"highlight": summary.highlight, "bullet_points": summary.bullet_points}
+
+
+@app.get("/sessions/{session_id}")
+def get_session(session_id: str):
+    session = sessions.get(session_id)
+    metrics.counter("sessions.get").inc()
+    return {"session_id": session.session_id, "segments": session.serialized_segments(), "language": session.language}
+
+
+@app.post("/sessions/{session_id}/speakers")
+def label_speaker(session_id: str, request: SpeakerLabelRequest):
+    session = sessions.label(session_id, request.speaker_id, request.display_name)
+    metrics.counter("sessions.label").inc()
+    return {
+        "session_id": session.session_id,
+        "speaker": request.speaker_id,
+        "display_name": request.display_name,
+        "segments": session.serialized_segments(),
+    }
 
 
 @app.post("/summarize")
