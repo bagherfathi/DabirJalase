@@ -525,6 +525,26 @@ def get_session(session_id: str):
     }
 
 
+@app.get("/sessions/{session_id}/search")
+def search_session(session_id: str, query: str | None = None):
+    term = (query or "").strip()
+    if not term:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="query is required")
+
+    try:
+        results = sessions.search(session_id, term)
+    except KeyError as exc:  # pragma: no cover - exercised via API tests
+        _translate_session_error(exc)
+
+    metrics.counter("sessions.search").inc()
+    return {
+        "session_id": session_id,
+        "query": term,
+        "results": results,
+        "total": len(results),
+    }
+
+
 @app.patch("/sessions/{session_id}/metadata")
 def update_session_metadata(session_id: str, request: SessionMetadataRequest):
     try:

@@ -24,6 +24,7 @@ To keep the scaffold product-shaped, a minimal in-memory session orchestrator st
 - `POST /sessions/{id}/speakers` — label an unlabeled speaker id with a friendly name (for "who is this?" prompts)
 - `POST /sessions/{id}/speakers/forget` — redact a speaker’s text and clear their display name (privacy/DSR helper)
 - `PATCH /sessions/{id}/metadata` — set or update meeting metadata (title + agenda) for export and UI surfacing
+- `GET /sessions/{id}/search` — keyword search across diarized text with speaker labels where available
 - `GET /sessions/{id}` — fetch timeline segments with speaker labels where available
 - `GET /sessions/{id}/summary` — summarize accumulated segments for the session
 - `GET /sessions/{id}/export` — export the full meeting manifest with metadata, speaker labels, and a deterministic summary for download or archival

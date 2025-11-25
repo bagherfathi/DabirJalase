@@ -118,6 +118,26 @@ class Session:
             for segment in self.segments
         ]
 
+    def search(self, query: str) -> List[Dict[str, object]]:
+        term = query.strip()
+        if not term:
+            return []
+
+        lowered = term.lower()
+        results: List[Dict[str, object]] = []
+        for idx, segment in enumerate(self.segments):
+            if lowered in segment.text.lower():
+                results.append(
+                    {
+                        "index": idx,
+                        "speaker": segment.speaker,
+                        "speaker_label": self.speaker_labels.get(segment.speaker),
+                        "text": segment.text,
+                    }
+                )
+
+        return results
+
     def metadata_view(self) -> Dict[str, object]:
         return {
             "title": self.title,
@@ -167,6 +187,10 @@ class SessionStore:
         session = self.get(session_id)
         session.label_speaker(speaker_id, display_name)
         return session
+
+    def search(self, session_id: str, query: str) -> List[Dict[str, object]]:
+        session = self.get(session_id)
+        return session.search(query)
 
     def forget(self, session_id: str, speaker_id: str, redaction_text: str = "[redacted]") -> Tuple[Session, int]:
         session = self.get(session_id)

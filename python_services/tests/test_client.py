@@ -19,6 +19,8 @@ def test_client_flow_round_trip(tmp_path):
     session_id = created["session_id"]
 
     client.append_transcript(session_id, "سلام دنیا")
+    search = client.search_session(session_id, "سلام")
+    assert search["total"] == 1
     summary = client.get_summary(session_id)
     assert summary["metadata"]["title"] == "CLI"
 

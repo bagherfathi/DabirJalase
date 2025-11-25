@@ -105,6 +105,9 @@ class MeetingAssistantClient:
     def get_session(self, session_id: str) -> Dict[str, Any]:
         return self._get(f"/sessions/{session_id}")
 
+    def search_session(self, session_id: str, query: str) -> Dict[str, Any]:
+        return self._get(f"/sessions/{session_id}/search", params={"query": query})
+
     def get_summary(self, session_id: str) -> Dict[str, Any]:
         return self._get(f"/sessions/{session_id}/summary")
 

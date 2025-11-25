@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import urllib.parse
 from types import SimpleNamespace
 from typing import Any, Callable, Dict, List, Optional, get_type_hints
 
@@ -110,7 +111,7 @@ class FastAPI:
             for pair in query_params.split("&"):
                 if "=" in pair:
                     key, value = pair.split("=", 1)
-                    query[key] = value
+                    query[urllib.parse.unquote_plus(key)] = urllib.parse.unquote_plus(value)
 
         route, path_params = self._find_route(method, clean_path)
         request = Request(headers=headers, url=clean_path, query_params=query)
