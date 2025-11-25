@@ -55,6 +55,7 @@ Replace these with durable storage/queue-backed flows when wiring the production
 - Set `PY_SERVICES_MAX_REQUESTS_PER_MINUTE` to add simple in-memory rate limiting that returns `429` when exceeded.
 - Set `PY_SERVICES_STORAGE_DIR` to change where export manifests are written when using `/sessions/{id}/export/store`.
 - Configure `PY_SERVICES_EXPORT_RETENTION_DAYS` (default: `30`) to prune exports automatically after `/sessions/{id}/export/store` calls; set to `none` to disable automatic pruning and rely on `/exports/retention/sweep` instead.
+- A lightweight Python client (`python_services.client.MeetingAssistantClient`) is available for desktop integrations, plus a demo runner (`python -m python_services.scripts.http_client_demo`) that exercises the REST APIs end-to-end.
 
 ## Local development
 1. Create a virtualenv and install dependencies from `requirements.txt` (model extras can remain commented out in constrained environments).
