@@ -581,3 +581,10 @@ def synthesize(request: TtsRequest):
     audio = tts.synthesize(request.text, voice=request.voice)
     metrics.counter("tts.calls").inc()
     return {"encoding": audio.encoding, "payload_b64": audio.as_base64()}
+
+
+@app.get("/metrics")
+def metric_snapshot():
+    """Expose collected counters for lightweight observability."""
+
+    return {"counters": metrics.snapshot()}

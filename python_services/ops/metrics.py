@@ -22,3 +22,8 @@ class MetricsRegistry:
         if name not in self.counters:
             self.counters[name] = Counter(name=name)
         return self.counters[name]
+
+    def snapshot(self) -> Dict[str, int]:
+        """Return the current counter values as a plain dictionary."""
+
+        return {name: counter.value for name, counter in sorted(self.counters.items())}
