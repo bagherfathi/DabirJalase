@@ -1,0 +1,196 @@
+package com.meetingassistant.transport;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
+import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+
+/**
+ * HTTP client for communicating with Python services.
+ * Handles audio ingestion, transcription, diarization, and export.
+ */
+public class HttpClient {
+    private final String baseUrl;
+    private final String apiKey;
+    private final Gson gson = new Gson();
+    
+    public HttpClient(String baseUrl) {
+        this(baseUrl, null);
+    }
+    
+    public HttpClient(String baseUrl, String apiKey) {
+        this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        this.apiKey = apiKey;
+    }
+    
+    /**
+     * Check service health.
+     */
+    public CompletableFuture<Map<String, Object>> health() {
+        return CompletableFuture.supplyAsync(() -> {
+            return get("/health");
+        });
+    }
+    
+    /**
+     * Create a new session.
+     */
+    public CompletableFuture<Map<String, Object>> createSession(String sessionId, String language, String title) {
+        return CompletableFuture.supplyAsync(() -> {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("session_id", sessionId);
+            payload.put("language", language);
+            if (title != null) {
+                payload.put("title", title);
+            }
+            return post("/sessions", payload);
+        });
+    }
+    
+    /**
+     * Ingest audio chunk with VAD detection.
+     */
+    public CompletableFuture<Map<String, Object>> ingestAudio(String sessionId, byte[] audioData, int sampleRate) {
+        return CompletableFuture.supplyAsync(() -> {
+            // Convert audio bytes to float samples
+            List<Float> samples = new ArrayList<>();
+            for (int i = 0; i < audioData.length - 1; i += 2) {
+                int sample = (audioData[i] & 0xFF) | ((audioData[i + 1] & 0xFF) << 8);
+                if (sample > 32767) {
+                    sample -= 65536;
+                }
+                samples.add(sample / 32768.0f);
+            }
+            
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("samples", samples);
+            payload.put("threshold", 0.01);
+            payload.put("min_run", 3);
+            payload.put("transcript_hint", "speech detected");
+            
+            return post("/sessions/" + sessionId + "/ingest", payload);
+        });
+    }
+    
+    /**
+     * Get session summary.
+     */
+    public CompletableFuture<Map<String, Object>> getSummary(String sessionId) {
+        return CompletableFuture.supplyAsync(() -> {
+            return get("/sessions/" + sessionId + "/summary");
+        });
+    }
+    
+    /**
+     * Export session.
+     */
+    public CompletableFuture<Map<String, Object>> exportSession(String sessionId) {
+        return CompletableFuture.supplyAsync(() -> {
+            return get("/sessions/" + sessionId + "/export");
+        });
+    }
+    
+    /**
+     * Label a speaker.
+     */
+    public CompletableFuture<Map<String, Object>> labelSpeaker(String sessionId, String speakerId, String displayName) {
+        return CompletableFuture.supplyAsync(() -> {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("speaker_id", speakerId);
+            payload.put("display_name", displayName);
+            return post("/sessions/" + sessionId + "/speakers", payload);
+        });
+    }
+    
+    /**
+     * Get session data.
+     */
+    public CompletableFuture<Map<String, Object>> getSession(String sessionId) {
+        return CompletableFuture.supplyAsync(() -> {
+            return get("/sessions/" + sessionId);
+        });
+    }
+    
+    // Private helper methods
+    
+    private Map<String, Object> get(String path) {
+        try {
+            URL url = new URL(baseUrl + path);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Accept", "application/json");
+            if (apiKey != null) {
+                conn.setRequestProperty("x-api-key", apiKey);
+            }
+            
+            int responseCode = conn.getResponseCode();
+            String response = readResponse(conn);
+            
+            if (responseCode >= 200 && responseCode < 300) {
+                return parseJson(response);
+            } else {
+                throw new RuntimeException("HTTP " + responseCode + ": " + response);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Error making GET request to " + path, e);
+        }
+    }
+    
+    private Map<String, Object> post(String path, Map<String, Object> payload) {
+        try {
+            URL url = new URL(baseUrl + path);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Accept", "application/json");
+            if (apiKey != null) {
+                conn.setRequestProperty("x-api-key", apiKey);
+            }
+            conn.setDoOutput(true);
+            
+            String jsonPayload = gson.toJson(payload);
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(jsonPayload.getBytes(StandardCharsets.UTF_8));
+            }
+            
+            int responseCode = conn.getResponseCode();
+            String response = readResponse(conn);
+            
+            if (responseCode >= 200 && responseCode < 300) {
+                return parseJson(response);
+            } else {
+                throw new RuntimeException("HTTP " + responseCode + ": " + response);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Error making POST request to " + path, e);
+        }
+    }
+    
+    private String readResponse(HttpURLConnection conn) throws IOException {
+        InputStream inputStream = conn.getResponseCode() >= 400 ? conn.getErrorStream() : conn.getInputStream();
+        if (inputStream == null) {
+            return "";
+        }
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
+            StringBuilder response = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                response.append(line);
+            }
+            return response.toString();
+        }
+    }
+    
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseJson(String json) {
+        JsonObject jsonObject = JsonParser.parseString(json).getAsJsonObject();
+        return gson.fromJson(jsonObject, Map.class);
+    }
+}
+

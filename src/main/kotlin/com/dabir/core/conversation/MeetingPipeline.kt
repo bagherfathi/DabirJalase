@@ -20,6 +20,7 @@ class MeetingPipeline(
     private val tts: TtsEngine
 ) {
     private val currentChunk = CopyOnWriteArrayList<AudioFrame>()
+    val speakerFocusTracker = SpeakerFocusTracker()
 
     fun ingest(frame: AudioFrame, onUnknownSpeaker: (List<AudioFrame>) -> Speaker) {
         val denoised = noiseSuppressor.denoise(frame)
@@ -53,9 +54,23 @@ class MeetingPipeline(
         )
 
         diarization.enroll(speaker.id, currentChunk.toList())
+        
+        // Update speaker energy for focus tracking
+        speakerFocusTracker.updateSpeakerEnergy(speaker.id, currentChunk.toList())
 
         currentChunk.clear()
     }
+    
+    /**
+     * Get the main/dominant speaker for UI focus.
+     */
+    fun getMainSpeaker(): String? = speakerFocusTracker.getMainSpeaker()
+    
+    /**
+     * Get energy level for a speaker (0.0 to 1.0).
+     */
+    fun getSpeakerEnergyLevel(speakerId: String): Double = 
+        speakerFocusTracker.getSpeakerEnergyLevel(speakerId)
 
     fun summarize(): com.dabir.core.model.Summary {
         return summarizer.summarize(conversationState.allUtterances())
