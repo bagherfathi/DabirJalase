@@ -81,6 +81,7 @@ microphone.stream().pipe(NoiseSuppressor()).onChunk { frames ->
 - `MeetingPipeline` wires VAD, denoise, STT, diarization, and summarization hooks; now includes enrollment updates for unknown speakers.
 - Added heuristic `EnergyCentroidDiarizationEngine`, `KeywordSummarizer`, console demo (`App.kt`), and Markdown/JSON exporters as smoke-test utilities.
 - Added a file-based transcript store that snapshots utterances/speakers to timestamped Markdown and JSON for early persistence.
+- Added a file-backed speaker registry store to keep diarization labels consistent across demo sessions.
 - Replace heuristics and stubs (`SimpleVad`, `WhisperOnnxStub`, `StubDiarizationEngine`, `StubTtsEngine`, `KeywordSummarizer`) with ONNX/LLM-backed engines to reach production quality.
 
 See `docs/progress.md` for the latest execution plan and percentage breakdown.

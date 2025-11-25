@@ -15,6 +15,10 @@ class ConversationState {
         speakers[speaker.id] = speaker
     }
 
+    fun registerSpeakers(speakers: Iterable<Speaker>) {
+        speakers.forEach { registerSpeaker(it) }
+    }
+
     fun speaker(id: String): Speaker? = speakers[id]
 
     fun addUtterance(speakerId: String, text: String, startTimeMs: Long, endTimeMs: Long): Utterance {

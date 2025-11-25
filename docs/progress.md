@@ -12,6 +12,7 @@ Overall: **~55%** of foundational planning + skeleton code is in place; producti
 - Added high-level blueprint and architecture notes for the cross-platform Farsi meeting assistant.
 - Created Kotlin JVM project scaffolding with models, audio/VAD stubs, STT/TTS/diarization/summarization interfaces, and a meeting pipeline that wires them together.
 - Added file-based transcript persistence for early testing of exports alongside console demo wiring.
+- Added file-based speaker registry persistence to survive restarts in smoke tests.
 
 ## What remains
 - Integrate real ONNX models (Whisper, Silero VAD, PyAnnote diarization, RNNoise/NSNet2 noise suppression) via `onnxruntime` bindings.

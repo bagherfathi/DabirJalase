@@ -11,6 +11,7 @@ import com.dabir.core.stt.WhisperOnnxStub
 import com.dabir.core.summarization.KeywordSummarizer
 import com.dabir.core.tts.StubTtsEngine
 import com.dabir.core.export.TranscriptExporter
+import com.dabir.core.persistence.FileSpeakerStore
 import com.dabir.core.persistence.FileTranscriptStore
 import java.nio.file.Paths
 
@@ -19,6 +20,8 @@ import java.nio.file.Paths
  */
 fun main() {
     val conversationState = ConversationState()
+    val speakerStore = FileSpeakerStore(Paths.get("build/speakers/speakers.tsv"))
+    conversationState.registerSpeakers(speakerStore.load())
     val pipeline = MeetingPipeline(
         vad = SimpleVad(amplitudeThreshold = 100),
         noiseSuppressor = PassThroughSuppressor(),
@@ -47,6 +50,7 @@ fun main() {
     val export = conversationState.snapshot(metadata = mapOf("source" to "demo"))
     val store = FileTranscriptStore(Paths.get("build/transcripts"))
     store.save(export, summary)
+    speakerStore.save(conversationState.allSpeakers())
 
     println("\n--- Markdown Export ---\n")
     println(TranscriptExporter.toMarkdown(export, summary))
