@@ -137,3 +137,50 @@ def test_restore_endpoint_rehydrates_session(tmp_path, monkeypatch):
     assert payload["session_id"] == "restore-me"
     assert payload["segments"][0]["speaker_label"] == "Guest"
     assert payload["summary"]["highlight"]
+
+
+def test_export_download_supports_markdown(tmp_path, monkeypatch):
+    import python_services.api.server as server
+
+    monkeypatch.setenv("PY_SERVICES_STORAGE_DIR", str(tmp_path))
+    reload(server)
+    server.sessions.clear()
+
+    client = TestClient(server.app)
+
+    created = client.post(
+        "/sessions", json={"session_id": "dl", "language": "fa", "title": "Review", "agenda": ["Intro"]}
+    )
+    assert created.status_code == 200
+
+    appended = client.post("/sessions/append", json={"session_id": "dl", "transcript": "salam"})
+    assert appended.status_code == 200
+
+    stored = client.post("/sessions/dl/export/store")
+    assert stored.status_code == 200
+
+    download = client.get("/exports/dl/download?format=markdown")
+    assert download.status_code == 200
+    assert download.headers["Content-Type"] == "text/markdown"
+    content = download.content
+    assert "# Review" in content
+    assert "**Highlight:**" in content
+    assert "Intro" in content
+
+
+def test_export_download_rejects_unknown_format(tmp_path, monkeypatch):
+    import python_services.api.server as server
+
+    monkeypatch.setenv("PY_SERVICES_STORAGE_DIR", str(tmp_path))
+    reload(server)
+    server.sessions.clear()
+
+    client = TestClient(server.app)
+    created = client.post("/sessions", json={"session_id": "badfmt", "language": "fa"})
+    assert created.status_code == 200
+    stored = client.post("/sessions/badfmt/export/store")
+    assert stored.status_code == 200
+
+    download = client.get("/exports/badfmt/download?format=pdf")
+    assert download.status_code == 400
+    assert "format must be one of" in download.json()["detail"]

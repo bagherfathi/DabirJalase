@@ -27,6 +27,7 @@ To keep the scaffold product-shaped, a minimal in-memory session orchestrator st
 - `GET /sessions/{id}/summary` — summarize accumulated segments for the session
 - `GET /sessions/{id}/export` — export the full meeting manifest with metadata, speaker labels, and a deterministic summary for download or archival
 - `POST /sessions/{id}/export/store` — export and persist the manifest (including metadata) to `PY_SERVICES_STORAGE_DIR` (defaults to `./data/exports`)
+- `GET /exports/{id}/download?format=markdown|text` — download a stored export as Markdown (default) or plain text with metadata, summary, and labeled timeline
 - `POST /exports/{id}/restore` — reload a stored manifest from disk back into the in-memory session store (preserves speaker labels and metadata)
 - `DELETE /sessions/{id}` — remove the in-memory session and any persisted export manifest (idempotent)
 - `POST /exports/retention/sweep` — prune stored manifests older than the configured retention window (if enabled)

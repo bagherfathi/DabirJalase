@@ -553,7 +553,7 @@ For each PR above, enforce the following reviewable outputs to keep quality meas
 - **Forward/ backward data compatibility:** keep schema migrations additive by default; require dual-read adapters for at least one release when removing columns or changing policy defaults. Include automated compatibility tests that load last two release manifests and run smoke tests.
 - **Model compatibility:** annotate embeddings and diarization outputs with model version/hash; provide an auto-upgrade path that re-embeds galleries in the background and a rollback path that keeps prior vectors until verification completes.
 - **Config drift detection:** compare packaged defaults, enterprise overrides, and user-level configs at startup; surface a “drift report” with remediation actions (reset to default, accept enterprise override, or keep local deviation with risk badge).
-- **Export/import guarantees:** version export manifests and enforce forward-compatibility shims for at least two minor releases; provide a validator CLI that checks manifests before import to avoid partial restores.
+- **Export/import guarantees:** version export manifests and enforce forward-compatibility shims for at least two minor releases; provide a validator CLI that checks manifests before import to avoid partial restores. Offer text/Markdown renderings of stored manifests (metadata + labeled timeline + summary) so early users can share notes while the richer downstream integrations are still wiring up.
 
 ## Release Communication and Change Control
 - **Audience-specific notes:** ship concise release summaries for end users (UX/policy changes), admins (config/policy/telemetry impacts), and developers (API/SDK breaking changes). Localize Farsi/English and store offline.

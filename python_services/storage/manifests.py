@@ -44,3 +44,56 @@ class SessionExport:
     summary: Summary
     title: str | None = None
     agenda: List[str] = field(default_factory=list)
+
+
+def render_markdown(export: SessionExport) -> str:
+    """Return a Markdown representation of the session export."""
+
+    header = export.title or f"Session {export.session_id}"
+    lines = [f"# {header}"]
+    lines.append(f"- Session ID: `{export.session_id}`")
+    lines.append(f"- Created: {export.created_at.isoformat()}")
+    lines.append(f"- Language: {export.language}")
+    if export.agenda:
+        lines.append("- Agenda:")
+        for item in export.agenda:
+            lines.append(f"  - {item}")
+
+    lines.append("\n## Summary")
+    lines.append(f"**Highlight:** {export.summary.highlight}")
+    if export.summary.bullet_points:
+        lines.append("\n**Bullet Points:**")
+        for bullet in export.summary.bullet_points:
+            lines.append(f"- {bullet}")
+
+    lines.append("\n## Timeline")
+    for segment in export.segments:
+        speaker = segment.speaker_label or segment.speaker
+        lines.append(f"- **{speaker}**: {segment.text}")
+
+    return "\n".join(lines)
+
+
+def render_text(export: SessionExport) -> str:
+    """Return a plain-text representation of the session export."""
+
+    lines = [f"Session: {export.title or export.session_id}"]
+    lines.append(f"Session ID: {export.session_id}")
+    lines.append(f"Created: {export.created_at.isoformat()}")
+    lines.append(f"Language: {export.language}")
+    if export.agenda:
+        lines.append("Agenda:")
+        for item in export.agenda:
+            lines.append(f"- {item}")
+
+    lines.append("\nSummary:")
+    lines.append(export.summary.highlight)
+    for bullet in export.summary.bullet_points:
+        lines.append(f"- {bullet}")
+
+    lines.append("\nTimeline:")
+    for segment in export.segments:
+        speaker = segment.speaker_label or segment.speaker
+        lines.append(f"{speaker}: {segment.text}")
+
+    return "\n".join(lines)

@@ -12,7 +12,7 @@ import uuid
 from dataclasses import asdict
 from typing import Callable, List
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Request, Response, status
 from pydantic import BaseModel
 
 from python_services.config import ServiceSettings
@@ -20,6 +20,7 @@ from python_services.diarization.diarization_service import DiarizationService
 from python_services.ops.metrics import MetricsRegistry
 from python_services.sessions import SessionStore
 from python_services.storage import persistence
+from python_services.storage import manifests
 from python_services.storage.manifests import SessionExport, TranscriptManifest
 from python_services.stt.whisper_service import Transcript, WhisperService
 from python_services.summarization.summarizer import Summarizer
@@ -425,6 +426,37 @@ def fetch_stored_export(session_id: str):
         "segments": [asdict(segment) for segment in exported.segments],
         "summary": {"highlight": exported.summary.highlight, "bullet_points": exported.summary.bullet_points},
     }
+
+
+@app.get("/exports/{session_id}/download")
+def download_export(session_id: str, format: str = "markdown"):
+    try:
+        exported = persistence.load_export(session_id, settings.storage_dir)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    fmt = (format or "markdown").lower()
+    if fmt not in {"markdown", "text"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="format must be one of: markdown, text",
+        )
+
+    if fmt == "markdown":
+        body = manifests.render_markdown(exported)
+        content_type = "text/markdown"
+        extension = "md"
+    else:
+        body = manifests.render_text(exported)
+        content_type = "text/plain"
+        extension = "txt"
+
+    metrics.counter("exports.download").inc()
+    headers = {
+        "Content-Type": content_type,
+        "Content-Disposition": f'attachment; filename="{session_id}.{extension}"',
+    }
+    return Response(body, headers=headers)
 
 
 @app.post("/exports/{session_id}/restore")
