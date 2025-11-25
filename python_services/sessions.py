@@ -245,6 +245,11 @@ class SessionStore:
     def clear(self) -> None:
         self._sessions.clear()
 
+    def session_ids(self) -> list[str]:
+        """Return the known session identifiers in deterministic order."""
+
+        return sorted(self._sessions.keys())
+
     def restore(self, export: SessionExport) -> Session:
         """Hydrate a session from a persisted export manifest."""
 

@@ -25,6 +25,7 @@ class ServiceError(RuntimeError):
 class _Response:
     status_code: int
     text: str
+    content: bytes = b""
 
     def json(self) -> Any:
         if not self.text:
@@ -50,8 +51,9 @@ class _UrllibClient:
         req = urllib.request.Request(url, data=data, headers=headers, method=method.upper())
         try:
             with urllib.request.urlopen(req) as resp:
-                body = resp.read().decode("utf-8")
-                return _Response(status_code=resp.getcode(), text=body)
+                content = resp.read()
+                body = content.decode("utf-8")
+                return _Response(status_code=resp.getcode(), text=body, content=content)
         except urllib.error.HTTPError as exc:  # pragma: no cover - exercised via client tests
             body = exc.read().decode("utf-8")
             return _Response(status_code=exc.code, text=body)
@@ -127,6 +129,11 @@ class MeetingAssistantClient:
         response = self._request("GET", f"/exports/{session_id}/download", params={"format": format})
         return response.text
 
+    def download_support_bundle(self, include_exports: bool = True) -> bytes:
+        params = {"include_exports": str(include_exports).lower()}
+        response = self._request("GET", "/support/bundle", params=params)
+        return response.content or response.text.encode("utf-8")
+
     def restore_export(self, session_id: str) -> Dict[str, Any]:
         return self._post(f"/exports/{session_id}/restore", {})
 
@@ -165,16 +172,21 @@ class MeetingAssistantClient:
 
         status = getattr(response, "status_code", 0)
         raw_text = getattr(response, "text", None)
+        raw_content = getattr(response, "content", b"")
         if raw_text is None:
             content = getattr(response, "content", "")
             if isinstance(content, bytes):
-                raw_text = content.decode("utf-8")
+                try:
+                    raw_text = content.decode("utf-8")
+                except UnicodeDecodeError:
+                    raw_text = ""
+                raw_content = content
             elif isinstance(content, str):
                 raw_text = content
             else:
                 raw_text = json.dumps(content)
 
-        normalized = _Response(status_code=status, text=raw_text)
+        normalized = _Response(status_code=status, text=raw_text, content=raw_content)
         if normalized.status_code >= 400:
             raise ServiceError(f"request failed ({normalized.status_code}): {normalized.text}")
         return normalized

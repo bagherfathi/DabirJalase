@@ -1,3 +1,7 @@
+import io
+import json
+import zipfile
+
 from fastapi import TestClient
 
 from python_services.api import server
@@ -49,3 +53,16 @@ def test_client_raises_on_error(tmp_path):
         assert "404" in str(exc)
     else:  # pragma: no cover - defensive
         raise AssertionError("expected ServiceError for missing session")
+
+
+def test_client_support_bundle(tmp_path):
+    client = _fresh_client(tmp_path)
+    created = client.create_session(session_id="bundle", title="Bundle Test")
+    assert created["session_id"] == "bundle"
+
+    client.store_export("bundle")
+
+    bundle_bytes = client.download_support_bundle()
+    with zipfile.ZipFile(io.BytesIO(bundle_bytes)) as archive:
+        exports = json.loads(archive.read("exports/index.json"))
+        assert exports["export_ids"] == ["bundle"]

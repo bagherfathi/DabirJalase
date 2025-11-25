@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from python_services.config import ServiceSettings
 from python_services.diarization.diarization_service import DiarizationService
 from python_services.ops.metrics import MetricsRegistry
+from python_services.ops import support
 from python_services.sessions import SessionStore
 from python_services.storage import persistence
 from python_services.storage import manifests
@@ -608,3 +609,21 @@ def metric_snapshot():
     """Expose collected counters for lightweight observability."""
 
     return {"counters": metrics.snapshot()}
+
+
+@app.get("/support/bundle")
+def support_bundle(include_exports: bool = True):
+    include_exports = str(include_exports).lower() not in {"false", "0", "no"}
+    bundle = support.build_support_bundle(
+        settings=settings,
+        metrics=metrics,
+        sessions=sessions,
+        include_exports=include_exports,
+    )
+
+    metrics.counter("support.bundle").inc()
+    headers = {
+        "Content-Type": "application/zip",
+        "Content-Disposition": "attachment; filename=diagnostics.zip",
+    }
+    return Response(bundle, headers=headers)
