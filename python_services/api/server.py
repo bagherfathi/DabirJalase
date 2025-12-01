@@ -37,7 +37,7 @@ app = FastAPI(title="Meeting Assistant Services")
 class RateLimiter:
     def __init__(self, max_requests_per_minute: int | None, now: Callable[[], float] | None = None):
         self.max_requests_per_minute = max_requests_per_minute
-        self._now = now or uuid.uuid1().time  # stable monotonic-ish source without importing time
+        self._now = now or (lambda: uuid.uuid1().time)  # stable monotonic-ish source without importing time
         self._events: collections.deque[float] = collections.deque()
 
     def allow(self) -> bool:
@@ -79,17 +79,44 @@ async def enforce_security(request: Request, call_next):
 async def apply_cors(request: Request, call_next):
     response = await call_next(request)
     origin = request.headers.get("origin")
-    allow_any = "*" in settings.allowed_origins
-    if settings.allowed_origins and (allow_any or (origin and origin in settings.allowed_origins)):
-        response.headers["access-control-allow-origin"] = origin if origin and not allow_any else "*"
-        response.headers["access-control-allow-headers"] = "*"
-        response.headers["access-control-allow-methods"] = "GET,POST,DELETE,OPTIONS"
+    if settings.allowed_origins:
+        allow_any = "*" in settings.allowed_origins
+        if allow_any or (origin and origin in settings.allowed_origins):
+            response.headers["access-control-allow-origin"] = origin if origin and not allow_any else "*"
+            response.headers["access-control-allow-headers"] = "*"
+            response.headers["access-control-allow-methods"] = "GET,POST,DELETE,OPTIONS"
     return response
 
-stt = WhisperService()
-diarization = DiarizationService()
-tts = TextToSpeechService()
-summarizer = Summarizer()
+# Lazy-loaded services to avoid blocking startup with model downloads
+_stt_instance = None
+_diarization_instance = None
+_tts_instance = None
+_summarizer_instance = None
+
+def get_stt():
+    global _stt_instance
+    if _stt_instance is None:
+        _stt_instance = WhisperService()
+    return _stt_instance
+
+def get_diarization():
+    global _diarization_instance
+    if _diarization_instance is None:
+        _diarization_instance = DiarizationService()
+    return _diarization_instance
+
+def get_tts():
+    global _tts_instance
+    if _tts_instance is None:
+        _tts_instance = TextToSpeechService()
+    return _tts_instance
+
+def get_summarizer():
+    global _summarizer_instance
+    if _summarizer_instance is None:
+        _summarizer_instance = Summarizer()
+    return _summarizer_instance
+
 sessions = SessionStore()
 metrics = MetricsRegistry()
 rate_limiter = RateLimiter(settings.max_requests_per_minute)
@@ -181,7 +208,7 @@ def healthcheck():
 
 @app.post("/transcribe")
 def transcribe(request: TranscribeRequest):
-    transcript: Transcript = stt.transcribe(request.content, language=request.language)
+    transcript: Transcript = get_stt().transcribe(request.content, language=request.language)
     metrics.counter("transcribe.calls").inc()
     return {"language": transcript.language, "segments": [asdict(s) for s in transcript.segments]}
 
@@ -222,8 +249,8 @@ def ingest_session_audio(session_id: str, request: SessionIngestRequest):
     transcript_text = request.transcript_hint.strip() or "speech detected"
     transcript_text = f"{transcript_text}: {'; '.join(span_descriptions)}"
 
-    transcript = stt.transcribe(transcript_text, language=session.language)
-    diarized = diarization.diarize(transcript)
+    transcript = get_stt().transcribe(transcript_text, language=session.language)
+    diarized = get_diarization().diarize(transcript)
     manifest = TranscriptManifest.from_diarized(
         transcript_id=session_id, language=transcript.language, segments=diarized
     )
@@ -311,8 +338,8 @@ def process_session_buffer(session_id: str, request: ProcessBufferRequest):
 
 @app.post("/diarize")
 def diarize(request: SpeakerRequest):
-    transcript = stt.transcribe(request.transcript)
-    diarized = diarization.diarize(transcript)
+    transcript = get_stt().transcribe(request.transcript)
+    diarized = get_diarization().diarize(transcript)
     manifest = TranscriptManifest.from_diarized(
         transcript_id="stub", language=transcript.language, segments=diarized
     )
@@ -335,8 +362,8 @@ def create_session(request: SessionCreateRequest):
 
 @app.post("/sessions/append")
 def append_to_session(request: SessionAppendRequest):
-    transcript = stt.transcribe(request.transcript)
-    diarized = diarization.diarize(transcript)
+    transcript = get_stt().transcribe(request.transcript)
+    diarized = get_diarization().diarize(transcript)
     manifest = TranscriptManifest.from_diarized(
         transcript_id=request.session_id, language=transcript.language, segments=diarized
     )
@@ -592,14 +619,14 @@ def forget_speaker(session_id: str, request: ForgetSpeakerRequest):
 
 @app.post("/summarize")
 def summarize(request: SummarizeRequest):
-    summary = summarizer.summarize(request.transcript, max_points=request.max_points)
+    summary = get_summarizer().summarize(request.transcript, max_points=request.max_points)
     metrics.counter("summarize.calls").inc()
     return {"highlight": summary.highlight, "bullet_points": summary.bullet_points}
 
 
 @app.post("/tts")
 def synthesize(request: TtsRequest):
-    audio = tts.synthesize(request.text, voice=request.voice)
+    audio = get_tts().synthesize(request.text, voice=request.voice)
     metrics.counter("tts.calls").inc()
     return {"encoding": audio.encoding, "payload_b64": audio.as_base64()}
 

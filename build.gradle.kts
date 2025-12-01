@@ -1,14 +1,6 @@
-buildscript {
-    repositories {
-        mavenCentral()
-        gradlePluginPortal()
-    }
-    dependencies {
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.23")
-    }
+plugins {
+    kotlin("jvm") version "1.9.23"
 }
-
-apply(plugin = "org.jetbrains.kotlin.jvm")
 
 group = "com.dabir"
 version = "0.1.0"

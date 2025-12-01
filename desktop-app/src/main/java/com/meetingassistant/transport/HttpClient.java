@@ -42,6 +42,7 @@ public class HttpClient {
      * Create a new session.
      */
     public CompletableFuture<Map<String, Object>> createSession(String sessionId, String language, String title) {
+        System.out.println("[DEBUG] HttpClient.createSession() called: sessionId=" + sessionId + ", language=" + language);
         return CompletableFuture.supplyAsync(() -> {
             Map<String, Object> payload = new HashMap<>();
             payload.put("session_id", sessionId);
@@ -49,7 +50,10 @@ public class HttpClient {
             if (title != null) {
                 payload.put("title", title);
             }
-            return post("/sessions", payload);
+            System.out.println("[DEBUG] Sending POST to /sessions with payload: " + payload);
+            Map<String, Object> result = post("/sessions", payload);
+            System.out.println("[DEBUG] POST /sessions response: " + result);
+            return result;
         });
     }
     
@@ -57,6 +61,7 @@ public class HttpClient {
      * Ingest audio chunk with VAD detection.
      */
     public CompletableFuture<Map<String, Object>> ingestAudio(String sessionId, byte[] audioData, int sampleRate) {
+        System.out.println("[DEBUG] HttpClient.ingestAudio() called: sessionId=" + sessionId + ", audioData.length=" + audioData.length + ", sampleRate=" + sampleRate);
         return CompletableFuture.supplyAsync(() -> {
             // Convert audio bytes to float samples
             List<Float> samples = new ArrayList<>();
@@ -68,13 +73,18 @@ public class HttpClient {
                 samples.add(sample / 32768.0f);
             }
             
+            System.out.println("[DEBUG] Converted " + audioData.length + " bytes to " + samples.size() + " float samples");
+            
             Map<String, Object> payload = new HashMap<>();
             payload.put("samples", samples);
             payload.put("threshold", 0.01);
             payload.put("min_run", 3);
             payload.put("transcript_hint", "speech detected");
             
-            return post("/sessions/" + sessionId + "/ingest", payload);
+            System.out.println("[DEBUG] Sending POST to /sessions/" + sessionId + "/ingest");
+            Map<String, Object> result = post("/sessions/" + sessionId + "/ingest", payload);
+            System.out.println("[DEBUG] POST /sessions/" + sessionId + "/ingest response: " + (result != null ? "success" : "null"));
+            return result;
         });
     }
     

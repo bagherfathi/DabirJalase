@@ -40,7 +40,7 @@ class EnergyCentroidDiarizationEngine(
 
     private fun cosineSimilarity(a: FloatArray, b: FloatArray): Double {
         if (a.isEmpty() || b.isEmpty() || a.size != b.size) return -1.0
-        val dot = a.indices.sumOf { a[it] * b[it] }
+        val dot = a.indices.sumOf { (a[it] * b[it]).toDouble() }
         val normA = sqrt(a.sumOf { (it * it).toDouble() })
         val normB = sqrt(b.sumOf { (it * it).toDouble() })
         if (normA == 0.0 || normB == 0.0) return -1.0

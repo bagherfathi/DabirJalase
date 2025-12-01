@@ -11,6 +11,7 @@ import javafx.geometry.NodeOrientation;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -22,6 +23,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import javax.sound.sampled.AudioFormat;
 
 /**
  * Main JavaFX application that integrates all components.
@@ -39,13 +41,33 @@ public class MainApplication extends Application {
     
     private Button startStopButton;
     private Button exportButton;
+    private Button playAudioButton;
     private Label statusLabel;
+    private ProgressBar audioLevelIndicator;
+    private Label audioLevelLabel;
+    private List<byte[]> capturedAudioChunks = new ArrayList<>();
+    private AudioFormat capturedAudioFormat;
     
     @Override
     public void start(Stage primaryStage) {
         // Initialize components
         captureService = new CaptureService();
-        httpClient = new HttpClient("http://localhost:8000");
+        
+        // Get server URL from environment variable or system property, default to localhost
+        String serverUrl = System.getenv("MEETING_ASSISTANT_SERVER_URL");
+        if (serverUrl == null || serverUrl.isEmpty()) {
+            serverUrl = System.getProperty("meeting.assistant.server.url");
+        }
+        if (serverUrl == null || serverUrl.isEmpty()) {
+            serverUrl = "http://localhost:8000";
+        }
+        // Ensure URL doesn't end with /
+        if (serverUrl.endsWith("/")) {
+            serverUrl = serverUrl.substring(0, serverUrl.length() - 1);
+        }
+        
+        System.out.println("[INFO] Connecting to server: " + serverUrl);
+        httpClient = new HttpClient(serverUrl);
         chatTimeline = new ChatTimeline();
         speakerPrompt = new SpeakerPrompt();
         
@@ -68,10 +90,24 @@ public class MainApplication extends Application {
         exportButton.setDisable(true);
         exportButton.setOnAction(e -> exportSummary());
         
+        playAudioButton = new Button("▶ پخش صدا");
+        playAudioButton.setStyle("-fx-font-size: 14px; -fx-padding: 8px 16px;");
+        playAudioButton.setDisable(true);
+        playAudioButton.setOnAction(e -> playCapturedAudio());
+        
         statusLabel = new Label("آماده");
         statusLabel.setStyle("-fx-font-size: 12px; -fx-padding: 8px;");
         
-        controlsBox.getChildren().addAll(startStopButton, exportButton, statusLabel);
+        // Audio level indicator
+        audioLevelIndicator = new ProgressBar(0.0);
+        audioLevelIndicator.setPrefWidth(200);
+        audioLevelIndicator.setPrefHeight(20);
+        audioLevelIndicator.setStyle("-fx-accent: green;");
+        
+        audioLevelLabel = new Label("صدا: --");
+        audioLevelLabel.setStyle("-fx-font-size: 11px; -fx-padding: 4px;");
+        
+        controlsBox.getChildren().addAll(startStopButton, exportButton, playAudioButton, statusLabel, audioLevelIndicator, audioLevelLabel);
         root.setTop(controlsBox);
         
         // Center: Chat timeline
@@ -80,8 +116,31 @@ public class MainApplication extends Application {
         
         // Setup audio capture listener
         captureService.addChunkListener((audioData, sampleRate) -> {
+            System.out.println("[DEBUG] Listener callback: audioData.length=" + audioData.length + ", currentSessionId=" + currentSessionId + ", isRecording=" + isRecording);
+            
+            // Store audio format for playback
+            if (capturedAudioFormat == null) {
+                capturedAudioFormat = captureService.getAudioFormat();
+            }
+            
+            // Store captured audio for playback
+            if (isRecording) {
+                synchronized (capturedAudioChunks) {
+                    capturedAudioChunks.add(audioData.clone());
+                    Platform.runLater(() -> {
+                        playAudioButton.setDisable(capturedAudioChunks.isEmpty());
+                    });
+                }
+            }
+            
+            // Calculate audio level for visual feedback
+            calculateAndDisplayAudioLevel(audioData);
+            
             if (currentSessionId != null && isRecording) {
+                System.out.println("[DEBUG] Calling handleAudioChunk...");
                 handleAudioChunk(audioData, sampleRate);
+            } else {
+                System.out.println("[WARN] Skipping handleAudioChunk - currentSessionId=" + currentSessionId + ", isRecording=" + isRecording);
             }
         });
         
@@ -124,44 +183,103 @@ public class MainApplication extends Application {
     }
     
     private void startRecording() {
+        System.out.println("[DEBUG] startRecording() called");
         try {
+            statusLabel.setText("در حال ایجاد session...");
+            statusLabel.setStyle("-fx-font-size: 12px; -fx-padding: 8px; -fx-text-fill: blue;");
+            System.out.println("[DEBUG] Status updated: Creating session...");
+            
             // Create new session
             currentSessionId = UUID.randomUUID().toString();
             String title = "جلسه " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+            System.out.println("[DEBUG] Session ID: " + currentSessionId);
+            System.out.println("[DEBUG] Calling httpClient.createSession()...");
             
             httpClient.createSession(currentSessionId, "fa", title).thenAccept(session -> {
+                System.out.println("[DEBUG] createSession callback received");
+                System.out.println("[DEBUG] Session response: " + (session != null ? session.toString() : "null"));
+                
                 Platform.runLater(() -> {
-                    isRecording = true;
-                    startStopButton.setText("توقف ضبط");
-                    exportButton.setDisable(false);
+                    if (session == null) {
+                        System.out.println("[ERROR] Session is null!");
+                        statusLabel.setText("خطا: session ایجاد نشد");
+                        statusLabel.setStyle("-fx-font-size: 12px; -fx-padding: 8px; -fx-text-fill: red;");
+                        return;
+                    }
+                    
+                    System.out.println("[DEBUG] Session created successfully, starting audio capture...");
+                    statusLabel.setText("در حال شروع ضبط صدا...");
+                    statusLabel.setStyle("-fx-font-size: 12px; -fx-padding: 8px; -fx-text-fill: blue;");
+                    
+                    // Start audio capture
+                    try {
+                        System.out.println("[DEBUG] Calling captureService.startCapture()...");
+                        captureService.startCapture();
+                        System.out.println("[DEBUG] captureService.startCapture() completed successfully");
+                        
+                        // If we get here, capture started successfully
+                        isRecording = true;
+                        startStopButton.setText("توقف ضبط");
+                        exportButton.setDisable(false);
                     statusLabel.setText("در حال ضبط...");
                     statusLabel.setStyle("-fx-font-size: 12px; -fx-padding: 8px; -fx-text-fill: green;");
                     chatTimeline.clear();
                     speakerNames.clear();
-                });
-                
-                // Start audio capture
-                Platform.runLater(() -> {
-                    try {
-                        captureService.startCapture();
-                    } catch (Exception e) {
+                    // Clear previous audio chunks
+                    synchronized (capturedAudioChunks) {
+                        capturedAudioChunks.clear();
+                        playAudioButton.setDisable(true);
+                    }
+                    System.out.println("[DEBUG] Recording started successfully! isRecording=" + isRecording);
+                    } catch (javax.sound.sampled.LineUnavailableException e) {
+                        System.err.println("[ERROR] LineUnavailableException: " + e.getMessage());
                         e.printStackTrace();
-                        Platform.runLater(() -> {
-                            statusLabel.setText("خطا در شروع ضبط: " + e.getMessage());
-                            isRecording = false;
-                            startStopButton.setText("شروع ضبط");
-                        });
+                        String errorMsg = "خطا در دسترسی به میکروفون: " + e.getMessage();
+                        if (e.getMessage() != null && e.getMessage().contains("format")) {
+                            errorMsg = "فرمت صوتی پشتیبانی نمی‌شود. لطفا میکروفون دیگری امتحان کنید.";
+                        }
+                        statusLabel.setText(errorMsg);
+                        statusLabel.setStyle("-fx-font-size: 12px; -fx-padding: 8px; -fx-text-fill: red;");
+                        isRecording = false;
+                        startStopButton.setText("شروع ضبط");
+                        exportButton.setDisable(true);
+                    } catch (Exception e) {
+                        System.err.println("[ERROR] Exception in startCapture: " + e.getMessage());
+                        e.printStackTrace();
+                        String errorMsg = "خطا در شروع ضبط: " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+                        statusLabel.setText(errorMsg);
+                        statusLabel.setStyle("-fx-font-size: 12px; -fx-padding: 8px; -fx-text-fill: red;");
+                        isRecording = false;
+                        startStopButton.setText("شروع ضبط");
+                        exportButton.setDisable(true);
                     }
                 });
             }).exceptionally(e -> {
+                System.err.println("[ERROR] Exception in createSession: " + (e != null ? e.getMessage() : "null"));
+                if (e != null) {
+                    e.printStackTrace();
+                }
                 Platform.runLater(() -> {
-                    statusLabel.setText("خطا در ایجاد session: " + e.getMessage());
+                    String errorMsg = "خطا در ایجاد session: ";
+                    if (e != null && e.getCause() != null) {
+                        errorMsg += e.getCause().getMessage();
+                    } else if (e != null) {
+                        errorMsg += e.getMessage();
+                    } else {
+                        errorMsg += "خطای نامشخص";
+                    }
+                    statusLabel.setText(errorMsg);
+                    statusLabel.setStyle("-fx-font-size: 12px; -fx-padding: 8px; -fx-text-fill: red;");
+                    isRecording = false;
+                    startStopButton.setText("شروع ضبط");
                 });
                 return null;
             });
         } catch (Exception e) {
+            System.err.println("[ERROR] Exception in startRecording: " + e.getMessage());
             e.printStackTrace();
-            statusLabel.setText("خطا: " + e.getMessage());
+            statusLabel.setText("خطا: " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
+            statusLabel.setStyle("-fx-font-size: 12px; -fx-padding: 8px; -fx-text-fill: red;");
         }
     }
     
@@ -171,46 +289,205 @@ public class MainApplication extends Application {
         startStopButton.setText("شروع ضبط");
         statusLabel.setText("ضبط متوقف شد");
         statusLabel.setStyle("-fx-font-size: 12px; -fx-padding: 8px;");
+        audioLevelIndicator.setProgress(0.0);
+        audioLevelLabel.setText("صدا: --");
+        // Enable play button if we have captured audio
+        synchronized (capturedAudioChunks) {
+            playAudioButton.setDisable(capturedAudioChunks.isEmpty());
+        }
+    }
+    
+    private void playCapturedAudio() {
+        synchronized (capturedAudioChunks) {
+            if (capturedAudioChunks.isEmpty()) {
+                statusLabel.setText("هیچ صدایی ضبط نشده است");
+                return;
+            }
+        }
+        
+        statusLabel.setText("در حال پخش...");
+        playAudioButton.setDisable(true);
+        
+        // Play audio in a separate thread
+        new Thread(() -> {
+            try {
+                if (capturedAudioFormat == null) {
+                    Platform.runLater(() -> {
+                        statusLabel.setText("خطا: فرمت صوتی مشخص نیست");
+                        playAudioButton.setDisable(false);
+                    });
+                    return;
+                }
+                
+                // Combine all audio chunks
+                int totalSize = 0;
+                synchronized (capturedAudioChunks) {
+                    for (byte[] chunk : capturedAudioChunks) {
+                        totalSize += chunk.length;
+                    }
+                }
+                
+                byte[] combinedAudio = new byte[totalSize];
+                int offset = 0;
+                synchronized (capturedAudioChunks) {
+                    for (byte[] chunk : capturedAudioChunks) {
+                        System.arraycopy(chunk, 0, combinedAudio, offset, chunk.length);
+                        offset += chunk.length;
+                    }
+                }
+                
+                System.out.println("[DEBUG] Playing " + combinedAudio.length + " bytes of audio");
+                
+                // Get a source data line for playback
+                javax.sound.sampled.DataLine.Info info = new javax.sound.sampled.DataLine.Info(
+                    javax.sound.sampled.SourceDataLine.class, 
+                    capturedAudioFormat
+                );
+                
+                if (!javax.sound.sampled.AudioSystem.isLineSupported(info)) {
+                    Platform.runLater(() -> {
+                        statusLabel.setText("خطا: فرمت صوتی پشتیبانی نمی‌شود");
+                        playAudioButton.setDisable(false);
+                    });
+                    return;
+                }
+                
+                javax.sound.sampled.SourceDataLine line = (javax.sound.sampled.SourceDataLine) 
+                    javax.sound.sampled.AudioSystem.getLine(info);
+                line.open(capturedAudioFormat);
+                line.start();
+                
+                // Write audio data in chunks
+                int chunkSize = (int) (capturedAudioFormat.getSampleRate() * capturedAudioFormat.getFrameSize() * 0.1); // 100ms chunks
+                int bytesWritten = 0;
+                while (bytesWritten < combinedAudio.length) {
+                    int toWrite = Math.min(chunkSize, combinedAudio.length - bytesWritten);
+                    int written = line.write(combinedAudio, bytesWritten, toWrite);
+                    bytesWritten += written;
+                }
+                
+                // Wait for playback to finish
+                line.drain();
+                line.stop();
+                line.close();
+                
+                Platform.runLater(() -> {
+                    statusLabel.setText("پخش کامل شد");
+                    playAudioButton.setDisable(false);
+                });
+                
+            } catch (Exception e) {
+                System.err.println("[ERROR] Error playing audio: " + e.getMessage());
+                e.printStackTrace();
+                Platform.runLater(() -> {
+                    statusLabel.setText("خطا در پخش: " + e.getMessage());
+                    playAudioButton.setDisable(false);
+                });
+            }
+        }, "AudioPlayback").start();
+    }
+    
+    private void calculateAndDisplayAudioLevel(byte[] audioData) {
+        // Calculate RMS (Root Mean Square) for audio level
+        long sum = 0;
+        int sampleCount = 0;
+        
+        // Convert bytes to samples and calculate RMS
+        for (int i = 0; i < audioData.length - 1; i += 2) {
+            int sample = (audioData[i] & 0xFF) | ((audioData[i + 1] & 0xFF) << 8);
+            if (sample > 32767) {
+                sample -= 65536;
+            }
+            sum += (long) sample * sample;
+            sampleCount++;
+        }
+        
+        if (sampleCount > 0) {
+            double rms = Math.sqrt(sum / (double) sampleCount);
+            double normalizedLevel = Math.min(rms / 32768.0, 1.0); // Normalize to 0-1
+            
+            Platform.runLater(() -> {
+                audioLevelIndicator.setProgress(normalizedLevel);
+                
+                // Display as percentage
+                int percentage = (int) (normalizedLevel * 100);
+                if (percentage < 5) {
+                    audioLevelLabel.setText("صدا: خاموش");
+                    audioLevelLabel.setStyle("-fx-font-size: 11px; -fx-padding: 4px; -fx-text-fill: gray;");
+                } else if (percentage < 20) {
+                    audioLevelLabel.setText("صدا: ضعیف (" + percentage + "%)");
+                    audioLevelLabel.setStyle("-fx-font-size: 11px; -fx-padding: 4px; -fx-text-fill: orange;");
+                } else {
+                    audioLevelLabel.setText("صدا: فعال (" + percentage + "%)");
+                    audioLevelLabel.setStyle("-fx-font-size: 11px; -fx-padding: 4px; -fx-text-fill: green;");
+                }
+            });
+        }
     }
     
     private void handleAudioChunk(byte[] audioData, int sampleRate) {
         if (currentSessionId == null) {
+            System.out.println("[WARN] handleAudioChunk called but currentSessionId is null");
             return;
         }
         
+        System.out.println("[DEBUG] handleAudioChunk: audioData.length=" + audioData.length + ", sampleRate=" + sampleRate);
+        System.out.println("[DEBUG] Calling httpClient.ingestAudio() for session: " + currentSessionId);
+        
+        // Update status to show we're processing
+        Platform.runLater(() -> {
+            statusLabel.setText("در حال پردازش صدا...");
+        });
+        
         httpClient.ingestAudio(currentSessionId, audioData, sampleRate).thenAccept(response -> {
+            System.out.println("[DEBUG] ingestAudio response received: " + (response != null ? response.toString() : "null"));
             Platform.runLater(() -> {
+                statusLabel.setText("در حال ضبط...");
+                
                 if (response != null) {
                     @SuppressWarnings("unchecked")
                     List<Map<String, Object>> segments = (List<Map<String, Object>>) response.get("segments");
                     @SuppressWarnings("unchecked")
                     List<String> newSpeakers = (List<String>) response.get("new_speakers");
                     
-                    if (segments != null) {
+                    System.out.println("[DEBUG] Segments: " + (segments != null ? segments.size() : 0));
+                    System.out.println("[DEBUG] New speakers: " + (newSpeakers != null ? newSpeakers.size() : 0));
+                    
+                    if (segments != null && !segments.isEmpty()) {
                         for (Map<String, Object> segment : segments) {
                             String speakerId = (String) segment.get("speaker");
                             String text = (String) segment.get("text");
                             
                             if (text != null && !text.isEmpty()) {
                                 String displayName = speakerNames.getOrDefault(speakerId, speakerId);
+                                System.out.println("[DEBUG] Adding message: " + displayName + ": " + text);
                                 chatTimeline.addMessage(displayName, text);
                             }
                         }
+                    } else {
+                        System.out.println("[DEBUG] No segments in response (might be silence or VAD filtered)");
                     }
                     
                     // Handle new speakers
                     if (newSpeakers != null && !newSpeakers.isEmpty()) {
                         for (String speakerId : newSpeakers) {
                             if (!speakerNames.containsKey(speakerId)) {
+                                System.out.println("[DEBUG] New speaker detected: " + speakerId);
                                 promptForSpeakerName(speakerId);
                             }
                         }
                     }
+                } else {
+                    System.out.println("[WARN] ingestAudio returned null response");
                 }
             });
         }).exceptionally(e -> {
-            System.err.println("Error processing audio chunk: " + e.getMessage());
+            System.err.println("[ERROR] Error processing audio chunk: " + e.getMessage());
             e.printStackTrace();
+            Platform.runLater(() -> {
+                statusLabel.setText("خطا در پردازش صدا");
+                statusLabel.setStyle("-fx-font-size: 12px; -fx-padding: 8px; -fx-text-fill: red;");
+            });
             return null;
         });
     }
