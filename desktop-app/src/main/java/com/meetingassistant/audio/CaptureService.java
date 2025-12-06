@@ -163,31 +163,8 @@ public class CaptureService {
             formatToUse = AUDIO_FORMAT;
         }
         
-        // Ensure frame size is specified
-        if (formatToUse.getFrameSize() == AudioSystem.NOT_SPECIFIED) {
-            int channels = formatToUse.getChannels();
-            int sampleSizeInBits = formatToUse.getSampleSizeInBits();
-            if (sampleSizeInBits == AudioSystem.NOT_SPECIFIED) {
-                sampleSizeInBits = 16;
-            }
-            if (channels == AudioSystem.NOT_SPECIFIED) {
-                channels = 1;
-            }
-            float sampleRate = formatToUse.getSampleRate();
-            if (sampleRate == AudioSystem.NOT_SPECIFIED) {
-                sampleRate = 44100.0f;
-            }
-            boolean bigEndian = formatToUse.isBigEndian();
-            formatToUse = new AudioFormat(
-                formatToUse.getEncoding(),
-                sampleRate,
-                sampleSizeInBits,
-                channels,
-                channels * (sampleSizeInBits / 8), // frame size
-                sampleRate,
-                bigEndian
-            );
-        }
+        // Normalize format: ensure all required fields are specified and valid
+        formatToUse = normalizeAudioFormat(formatToUse);
         
         line.open(formatToUse);
         this.audioLine = line;
@@ -342,7 +319,81 @@ public class CaptureService {
         return isCapturing.get();
     }
     
+    /**
+     * Gets the static default audio format.
+     * @deprecated Use getActualAudioFormat() to get the format actually being used for recording.
+     */
     public AudioFormat getAudioFormat() {
         return AUDIO_FORMAT;
+    }
+    
+    /**
+     * Gets the actual audio format being used for recording.
+     * Returns the format from the active audio line, or the default format if not capturing.
+     */
+    public AudioFormat getActualAudioFormat() {
+        if (audioLine != null && isCapturing.get()) {
+            AudioFormat actualFormat = audioLine.getFormat();
+            System.out.println("[DEBUG] Actual audio format: " + actualFormat);
+            return actualFormat;
+        }
+        return AUDIO_FORMAT;
+    }
+    
+    /**
+     * Normalizes an AudioFormat to ensure all required fields are specified and valid.
+     * Fixes invalid frame rates and ensures frame size matches the format.
+     */
+    private AudioFormat normalizeAudioFormat(AudioFormat format) {
+        // Extract format properties
+        AudioFormat.Encoding encoding = format.getEncoding();
+        float sampleRate = format.getSampleRate();
+        int sampleSizeInBits = format.getSampleSizeInBits();
+        int channels = format.getChannels();
+        int frameSize = format.getFrameSize();
+        float frameRate = format.getFrameRate();
+        boolean bigEndian = format.isBigEndian();
+        
+        // Validate encoding - default to PCM_SIGNED if null or invalid
+        if (encoding == null) {
+            encoding = AudioFormat.Encoding.PCM_SIGNED;
+        }
+        
+        // Validate and set defaults for missing values
+        if (sampleRate == AudioSystem.NOT_SPECIFIED || sampleRate <= 0 || Float.isNaN(sampleRate) || Float.isInfinite(sampleRate)) {
+            sampleRate = 16000.0f; // Default to 16kHz for speech
+        }
+        
+        if (sampleSizeInBits == AudioSystem.NOT_SPECIFIED || sampleSizeInBits <= 0) {
+            sampleSizeInBits = 16; // Default to 16-bit
+        }
+        
+        if (channels == AudioSystem.NOT_SPECIFIED || channels <= 0) {
+            channels = 1; // Default to mono
+        }
+        
+        // Calculate frame size if not specified or invalid
+        if (frameSize == AudioSystem.NOT_SPECIFIED || frameSize <= 0) {
+            frameSize = channels * (sampleSizeInBits / 8);
+        }
+        
+        // Frame rate must equal sample rate for PCM formats
+        // If frame rate is invalid or doesn't match sample rate, fix it
+        if (frameRate == AudioSystem.NOT_SPECIFIED || frameRate <= 0 || 
+            Float.isNaN(frameRate) || Float.isInfinite(frameRate) ||
+            Math.abs(frameRate - sampleRate) > 0.1f) {
+            frameRate = sampleRate;
+        }
+        
+        // Create normalized format with all valid values
+        return new AudioFormat(
+            encoding,
+            sampleRate,
+            sampleSizeInBits,
+            channels,
+            frameSize,
+            frameRate,
+            bigEndian
+        );
     }
 }

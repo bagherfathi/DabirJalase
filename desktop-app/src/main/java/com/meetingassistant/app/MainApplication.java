@@ -1,6 +1,7 @@
 package com.meetingassistant.app;
 
 import com.meetingassistant.audio.CaptureService;
+import com.meetingassistant.config.AppConfig;
 import com.meetingassistant.transport.HttpClient;
 import com.meetingassistant.ui.ChatTimeline;
 import com.meetingassistant.ui.SpeakerPrompt;
@@ -50,24 +51,19 @@ public class MainApplication extends Application {
     
     @Override
     public void start(Stage primaryStage) {
+        // Load configuration
+        AppConfig config = AppConfig.getInstance();
+        config.printConfiguration();
+        
         // Initialize components
         captureService = new CaptureService();
         
-        // Get server URL from environment variable or system property, default to localhost
-        String serverUrl = System.getenv("MEETING_ASSISTANT_SERVER_URL");
-        if (serverUrl == null || serverUrl.isEmpty()) {
-            serverUrl = System.getProperty("meeting.assistant.server.url");
-        }
-        if (serverUrl == null || serverUrl.isEmpty()) {
-            serverUrl = "http://localhost:8000";
-        }
-        // Ensure URL doesn't end with /
-        if (serverUrl.endsWith("/")) {
-            serverUrl = serverUrl.substring(0, serverUrl.length() - 1);
-        }
+        // Get server URL and API key from configuration
+        String serverUrl = config.getServerUrl();
+        String apiKey = config.getApiKey();
         
         System.out.println("[INFO] Connecting to server: " + serverUrl);
-        httpClient = new HttpClient(serverUrl);
+        httpClient = new HttpClient(serverUrl, apiKey);
         chatTimeline = new ChatTimeline();
         speakerPrompt = new SpeakerPrompt();
         
@@ -118,10 +114,8 @@ public class MainApplication extends Application {
         captureService.addChunkListener((audioData, sampleRate) -> {
             System.out.println("[DEBUG] Listener callback: audioData.length=" + audioData.length + ", currentSessionId=" + currentSessionId + ", isRecording=" + isRecording);
             
-            // Store audio format for playback
-            if (capturedAudioFormat == null) {
-                capturedAudioFormat = captureService.getAudioFormat();
-            }
+            // Note: Audio format is now captured in startRecording() after startCapture() is called
+            // This ensures we get the actual format from the opened audio line
             
             // Store captured audio for playback
             if (isRecording) {
@@ -147,27 +141,57 @@ public class MainApplication extends Application {
         // Check service health on startup
         checkServiceHealth();
         
-        // Setup scene
-        Scene scene = new Scene(root, 900, 700);
+        // Setup scene with configured window size
+        Scene scene = new Scene(root, config.getWindowWidth(), config.getWindowHeight());
         primaryStage.setTitle("دبیر جلسه - Meeting Assistant");
         primaryStage.setScene(scene);
         primaryStage.show();
     }
     
     private void checkServiceHealth() {
+        System.out.println("[DEBUG] Checking service health...");
         httpClient.health().thenAccept(result -> {
+            System.out.println("[DEBUG] Health check response: " + result);
             Platform.runLater(() -> {
-                if (result != null && "ok".equals(result.get("status"))) {
-                    statusLabel.setText("سرویس آماده است");
-                    statusLabel.setStyle("-fx-font-size: 12px; -fx-padding: 8px; -fx-text-fill: green;");
+                if (result != null) {
+                    Object status = result.get("status");
+                    System.out.println("[DEBUG] Status value: " + status + " (type: " + (status != null ? status.getClass().getName() : "null") + ")");
+                    
+                    // Check for "ok" status (case-insensitive, handle both String and other types)
+                    String statusStr = status != null ? status.toString().toLowerCase() : null;
+                    if ("ok".equals(statusStr)) {
+                        statusLabel.setText("سرویس آماده است");
+                        statusLabel.setStyle("-fx-font-size: 12px; -fx-padding: 8px; -fx-text-fill: green;");
+                        System.out.println("[INFO] Service health check passed");
+                    } else {
+                        statusLabel.setText("خطا در اتصال به سرویس (status: " + status + ")");
+                        statusLabel.setStyle("-fx-font-size: 12px; -fx-padding: 8px; -fx-text-fill: red;");
+                        System.out.println("[WARN] Service health check failed - unexpected status: " + status);
+                    }
                 } else {
-                    statusLabel.setText("خطا در اتصال به سرویس");
+                    statusLabel.setText("خطا در اتصال به سرویس (null response)");
                     statusLabel.setStyle("-fx-font-size: 12px; -fx-padding: 8px; -fx-text-fill: red;");
+                    System.out.println("[WARN] Service health check returned null");
                 }
             });
         }).exceptionally(e -> {
+            System.err.println("[ERROR] Health check exception: " + e.getMessage());
+            e.printStackTrace();
             Platform.runLater(() -> {
-                statusLabel.setText("سرویس در دسترس نیست");
+                String errorMsg = "سرویس در دسترس نیست";
+                if (e.getCause() != null) {
+                    String causeMsg = e.getCause().getMessage();
+                    if (causeMsg != null) {
+                        if (causeMsg.contains("Connection refused") || causeMsg.contains("connect")) {
+                            errorMsg = "خطا: اتصال به سرور برقرار نشد";
+                        } else if (causeMsg.contains("timeout")) {
+                            errorMsg = "خطا: زمان اتصال به سرور به پایان رسید";
+                        } else if (causeMsg.contains("UnknownHostException")) {
+                            errorMsg = "خطا: آدرس سرور یافت نشد";
+                        }
+                    }
+                }
+                statusLabel.setText(errorMsg);
                 statusLabel.setStyle("-fx-font-size: 12px; -fx-padding: 8px; -fx-text-fill: red;");
             });
             return null;
@@ -195,7 +219,8 @@ public class MainApplication extends Application {
             System.out.println("[DEBUG] Session ID: " + currentSessionId);
             System.out.println("[DEBUG] Calling httpClient.createSession()...");
             
-            httpClient.createSession(currentSessionId, "fa", title).thenAccept(session -> {
+            AppConfig config = AppConfig.getInstance();
+            httpClient.createSession(currentSessionId, config.getDefaultLanguage(), title).thenAccept(session -> {
                 System.out.println("[DEBUG] createSession callback received");
                 System.out.println("[DEBUG] Session response: " + (session != null ? session.toString() : "null"));
                 
@@ -216,6 +241,16 @@ public class MainApplication extends Application {
                         System.out.println("[DEBUG] Calling captureService.startCapture()...");
                         captureService.startCapture();
                         System.out.println("[DEBUG] captureService.startCapture() completed successfully");
+                        
+                        // Capture the actual audio format being used (must be done after startCapture)
+                        capturedAudioFormat = captureService.getActualAudioFormat();
+                        System.out.println("[DEBUG] Captured actual audio format for playback: " + capturedAudioFormat);
+                        System.out.println("[DEBUG] Sample rate: " + capturedAudioFormat.getSampleRate());
+                        System.out.println("[DEBUG] Channels: " + capturedAudioFormat.getChannels());
+                        System.out.println("[DEBUG] Sample size: " + capturedAudioFormat.getSampleSizeInBits());
+                        System.out.println("[DEBUG] Endianness: " + (capturedAudioFormat.isBigEndian() ? "big" : "little"));
+                        System.out.println("[DEBUG] Frame size: " + capturedAudioFormat.getFrameSize());
+                        System.out.println("[DEBUG] Frame rate: " + capturedAudioFormat.getFrameRate());
                         
                         // If we get here, capture started successfully
                         isRecording = true;
@@ -337,6 +372,13 @@ public class MainApplication extends Application {
                 }
                 
                 System.out.println("[DEBUG] Playing " + combinedAudio.length + " bytes of audio");
+                System.out.println("[DEBUG] Playback format: " + capturedAudioFormat);
+                System.out.println("[DEBUG] Sample rate: " + capturedAudioFormat.getSampleRate());
+                System.out.println("[DEBUG] Channels: " + capturedAudioFormat.getChannels());
+                System.out.println("[DEBUG] Sample size: " + capturedAudioFormat.getSampleSizeInBits());
+                System.out.println("[DEBUG] Endianness: " + (capturedAudioFormat.isBigEndian() ? "big" : "little"));
+                System.out.println("[DEBUG] Frame size: " + capturedAudioFormat.getFrameSize());
+                System.out.println("[DEBUG] Frame rate: " + capturedAudioFormat.getFrameRate());
                 
                 // Get a source data line for playback
                 javax.sound.sampled.DataLine.Info info = new javax.sound.sampled.DataLine.Info(
@@ -345,6 +387,7 @@ public class MainApplication extends Application {
                 );
                 
                 if (!javax.sound.sampled.AudioSystem.isLineSupported(info)) {
+                    System.err.println("[ERROR] Audio format not supported for playback: " + capturedAudioFormat);
                     Platform.runLater(() -> {
                         statusLabel.setText("خطا: فرمت صوتی پشتیبانی نمی‌شود");
                         playAudioButton.setDisable(false);
@@ -355,6 +398,7 @@ public class MainApplication extends Application {
                 javax.sound.sampled.SourceDataLine line = (javax.sound.sampled.SourceDataLine) 
                     javax.sound.sampled.AudioSystem.getLine(info);
                 line.open(capturedAudioFormat);
+                System.out.println("[DEBUG] Opened playback line with format: " + line.getFormat());
                 line.start();
                 
                 // Write audio data in chunks

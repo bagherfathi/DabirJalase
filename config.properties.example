@@ -1,0 +1,30 @@
+# Meeting Assistant Desktop App Configuration
+# Copy this file to config.properties and modify as needed
+# The config file can be placed in:
+# - Current directory: ./config.properties
+# - User home: ~/.meetingassistant/config.properties
+# - Resources: src/main/resources/config.properties (bundled with app)
+
+# Server Configuration
+# The URL of the Python services server
+server.url=http://10.211.1.24:8000
+
+# API Key (optional, leave empty if not required)
+api.key=
+
+# Connection Settings
+# Connection timeout in milliseconds (default: 5000)
+connection.timeout=5000
+# Read timeout in milliseconds (default: 10000)
+read.timeout=10000
+
+# Audio Settings
+# Default language for sessions (default: fa)
+default.language=fa
+
+# UI Settings
+# Window width (default: 900)
+window.width=900
+# Window height (default: 700)
+window.height=700
+

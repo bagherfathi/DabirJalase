@@ -131,24 +131,45 @@ public class HttpClient {
     
     private Map<String, Object> get(String path) {
         try {
-            URL url = new URL(baseUrl + path);
+            String fullUrl = baseUrl + path;
+            System.out.println("[DEBUG] Making GET request to: " + fullUrl);
+            URL url = new URL(fullUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
             conn.setRequestProperty("Accept", "application/json");
+            // Timeouts will be set by caller if needed, using defaults here
+            conn.setConnectTimeout(5000); // 5 second connection timeout
+            conn.setReadTimeout(10000); // 10 second read timeout
             if (apiKey != null) {
                 conn.setRequestProperty("x-api-key", apiKey);
             }
             
             int responseCode = conn.getResponseCode();
+            System.out.println("[DEBUG] Response code: " + responseCode);
             String response = readResponse(conn);
+            System.out.println("[DEBUG] Response body: " + response);
             
             if (responseCode >= 200 && responseCode < 300) {
+                if (response == null || response.trim().isEmpty()) {
+                    System.out.println("[WARN] Empty response body");
+                    return new HashMap<>();
+                }
                 return parseJson(response);
             } else {
                 throw new RuntimeException("HTTP " + responseCode + ": " + response);
             }
+        } catch (java.net.ConnectException e) {
+            System.err.println("[ERROR] Connection refused to " + baseUrl + path);
+            throw new RuntimeException("Connection refused: " + e.getMessage(), e);
+        } catch (java.net.SocketTimeoutException e) {
+            System.err.println("[ERROR] Connection timeout to " + baseUrl + path);
+            throw new RuntimeException("Connection timeout: " + e.getMessage(), e);
+        } catch (java.net.UnknownHostException e) {
+            System.err.println("[ERROR] Unknown host: " + baseUrl);
+            throw new RuntimeException("Unknown host: " + e.getMessage(), e);
         } catch (IOException e) {
-            throw new RuntimeException("Error making GET request to " + path, e);
+            System.err.println("[ERROR] IO error making GET request to " + path + ": " + e.getMessage());
+            throw new RuntimeException("Error making GET request to " + path + ": " + e.getMessage(), e);
         }
     }
     
